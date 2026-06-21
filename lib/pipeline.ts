@@ -25,7 +25,11 @@ export async function runTranscription(id: string): Promise<void> {
     });
     await setStatus(id, "transcribed");
   } catch (e) {
-    await setStatus(id, "error", e instanceof Error ? e.message : String(e));
+    try {
+      await setStatus(id, "error", e instanceof Error ? e.message : String(e));
+    } catch {
+      // DB unavailable while recording error status — nothing further we can do
+    }
   }
 }
 
@@ -45,6 +49,10 @@ export async function runEnhancement(id: string): Promise<void> {
     });
     await setStatus(id, "done");
   } catch (err) {
-    await setStatus(id, "error", err instanceof Error ? err.message : String(err));
+    try {
+      await setStatus(id, "error", err instanceof Error ? err.message : String(err));
+    } catch {
+      // DB unavailable while recording error status — nothing further we can do
+    }
   }
 }

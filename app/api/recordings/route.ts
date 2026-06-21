@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   const form = await req.formData();
   const file = form.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "file required" }, { status: 400 });
-  const title = (form.get("title") as string) || file.name;
+  const title = (form.get("title") as string | null) ?? file.name;
 
   const [rec] = await db
     .insert(recordings)

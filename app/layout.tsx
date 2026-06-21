@@ -3,6 +3,7 @@ import Link from "next/link"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import { LogoutButton } from "@/components/logout-button"
 import { cn } from "@/lib/utils";
 
 const dmSans = DM_Sans({subsets:['latin'],variable:'--font-sans'})
@@ -35,6 +36,9 @@ export default function RootLayout({
             >
               Uploaden
             </Link>
+            <div className="ml-auto">
+              <LogoutButton />
+            </div>
           </header>
           <main>
             {children}

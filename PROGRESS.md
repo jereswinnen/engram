@@ -26,6 +26,47 @@
   - [ ] **HUMAN STEP**: Smoke test — OpenAI enhancement
   - [ ] **HUMAN STEP**: Full phone end-to-end acceptance test
 
+## Remaining Roadmap (post Phase 0)
+
+> Phase 0 code is complete and merged to `main`. The only Phase 0 work left is the
+> human deploy steps above (see `DEPLOY.md`). After that, the roadmap is:
+
+### Phase 1 — Plaud sync + real device (makes capture automatic)
+
+- [ ] **Plaud MCP OAuth** — authorize the official `mcp.plaud.ai` server (OAuth 2.x PKCE);
+      persist tokens encrypted via the existing AES util into `api_credentials`.
+      Reference implementation ready to port: `docs/plaud-mcp-sync.ts`.
+- [ ] **MCP sync client** — `list_files → get_file → download → store(R2) → transcribe → enhance`,
+      deduping on `recordings.plaud_file_id`, advancing `sync_state.last_cursor`.
+- [ ] **Scheduled background worker on Railway** — run the sync loop on a cron as a
+      persistent service (not serverless), so sync is laptop-independent.
+- [ ] **Device onboarding** — enable Plaud Private Cloud Sync + Wi-Fi charging-sync; verify
+      first real end-to-end sync, and the Plaud Desktop → cloud → Engram path for meetings.
+- [ ] **VERIFY in practice** — presigned audio URL downloads programmatically; pagination +
+      rate limits; exact MCP tool arg/field names and transport (streamable HTTP vs SSE).
+
+### Phase 1+ — deferred UX features
+
+- [ ] Waveform player (Wavesurfer.js) + click-to-seek between transcript and audio
+- [ ] Full-text search across all transcripts
+- [ ] Export: JSON / TXT / SRT-VTT subtitles / one-click full backup
+- [ ] Browser notifications when a recording finishes (no email — per project decision)
+
+### Phase 2 — closer to "Plaud Intelligence"
+
+- [ ] Multi-view / role-specific summaries (schema already allows multiple `ai_enhancements` rows per recording)
+- [ ] Template library (`templates` table = name + prompt + optional output schema)
+- [ ] Mind maps (prompt → hierarchical JSON → markmap/react-flow)
+- [ ] Ask-Engram (RAG): chunk → embed → `pgvector` → retrieve → answer with citations to word timestamps
+- [ ] Glossary/jargon: Scribe keyterm prompting or an LLM post-edit pass
+- [ ] Native iOS client (SwiftUI/SwiftData) against Engram's REST API
+
+### Known minor follow-ups (non-blocking, from code review)
+
+- [ ] `/upload` page has no server-side session guard (harmless — client component, upload API is 401-guarded); add `requireSession()` for consistency
+- [ ] Crypto hardening (optional): `parts.length !== 3` guard in `decryptSecret`; IV-tamper + wrong-key-length test cases
+- [ ] Retries insert new `transcriptions`/`ai_enhancements` rows rather than upserting (reads now `orderBy createdAt desc`, so newest wins — dedupe if it ever matters)
+
 ## Next.js 16 Gotchas
 
 These were discovered while reading `node_modules/next/dist/docs/` and apply to all subsequent tasks:

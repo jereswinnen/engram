@@ -36,7 +36,9 @@ export default function RootLayout({
               Uploaden
             </Link>
           </header>
-          {children}
+          <main>
+            {children}
+          </main>
         </ThemeProvider>
       </body>
     </html>

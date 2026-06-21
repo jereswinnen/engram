@@ -43,7 +43,7 @@ ENCRYPTION_KEY=<64 hex chars>
 # ElevenLabs Scribe v2
 ELEVENLABS_API_KEY=<your ElevenLabs key>
 
-# LLM (OpenAI-compatible)
+# LLM (OpenAI)
 OPENAI_API_KEY=<your OpenAI key>
 LLM_MODEL=gpt-5.4-mini-2026-03-17
 

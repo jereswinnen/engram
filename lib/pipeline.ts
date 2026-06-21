@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { recordings, transcriptions, aiEnhancements } from "@/db/schema";
 import { getStorage } from "@/lib/storage";
@@ -36,7 +36,7 @@ export async function runTranscription(id: string): Promise<void> {
 export async function runEnhancement(id: string): Promise<void> {
   try {
     await setStatus(id, "enhancing");
-    const t = await db.query.transcriptions.findFirst({ where: eq(transcriptions.recordingId, id) });
+    const t = await db.query.transcriptions.findFirst({ where: eq(transcriptions.recordingId, id), orderBy: [desc(transcriptions.createdAt)] });
     if (!t) throw new Error(`transcription for ${id} not found`);
     const e = await enhanceTranscript(t.fullText);
     await db.insert(aiEnhancements).values({

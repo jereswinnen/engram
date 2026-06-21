@@ -1,0 +1,171 @@
+# Engram — Railway Deployment Runbook
+
+End-to-end instructions for getting Engram live on Railway with managed Postgres and
+Cloudflare R2 storage. Follow steps in order.
+
+---
+
+## 1. Create Railway project + Postgres plugin
+
+1. Create a new project at [railway.com](https://railway.com).
+2. Click **+ Add** → **Database** → **PostgreSQL** to provision a managed Postgres instance.
+3. Click **+ Add** → **GitHub repo** (or **Deploy from template**) and point it at this repo.
+4. In the app service, open **Variables**. Railway automatically injects `DATABASE_URL`
+   from the Postgres plugin — confirm it appears before continuing.
+
+---
+
+## 2. Generate secrets
+
+Run locally (requires OpenSSL):
+
+```bash
+openssl rand -hex 32   # paste as ENCRYPTION_KEY
+openssl rand -hex 32   # paste as BETTER_AUTH_SECRET
+```
+
+Each produces 64 hex characters (32 bytes of entropy).
+
+---
+
+## 3. Set environment variables in the Railway app service
+
+Set every variable below under **Variables** → **Raw Editor** (or one by one).
+All are required at startup; the app will throw at boot if any are missing.
+
+```
+# Injected automatically by the Postgres plugin — verify it is present:
+DATABASE_URL=<injected by Railway Postgres plugin>
+
+# AES-256-GCM encryption key — 64 hex chars (openssl rand -hex 32)
+ENCRYPTION_KEY=<64 hex chars>
+
+# ElevenLabs Scribe v2
+ELEVENLABS_API_KEY=<your ElevenLabs key>
+
+# LLM (OpenAI-compatible)
+OPENAI_API_KEY=<your OpenAI key>
+LLM_MODEL=gpt-4o-mini        # or any openai-compatible model id
+
+# Cloudflare R2 (see Section 4)
+R2_ENDPOINT=https://<account_id>.r2.cloudflarestorage.com
+R2_ACCESS_KEY_ID=<R2 key id>
+R2_SECRET_ACCESS_KEY=<R2 secret>
+R2_BUCKET=engram
+
+# Better Auth — set both to your Railway public URL
+# (e.g. https://engram.up.railway.app — no trailing slash)
+BETTER_AUTH_SECRET=<64 hex chars>
+BETTER_AUTH_URL=https://<your-service>.up.railway.app
+NEXT_PUBLIC_APP_URL=https://<your-service>.up.railway.app
+```
+
+> **Note:** `BETTER_AUTH_URL` and `NEXT_PUBLIC_APP_URL` must be the same Railway public
+> URL (no trailing slash). Railway generates the domain under **Settings → Networking →
+> Public domain** — generate it before setting these vars if you haven't already.
+
+---
+
+## 4. Cloudflare R2 — create bucket + API token
+
+1. Log in to the [Cloudflare dashboard](https://dash.cloudflare.com).
+2. Navigate to **R2 Object Storage** → **Create bucket**. Name it `engram` (or anything;
+   set the same name in `R2_BUCKET`).
+3. In R2, go to **Manage R2 API tokens** → **Create API token**.
+   - Permissions: **Object Read & Write** scoped to the `engram` bucket.
+   - Copy the **Access Key ID** → `R2_ACCESS_KEY_ID`.
+   - Copy the **Secret Access Key** → `R2_SECRET_ACCESS_KEY`.
+4. The endpoint is `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` — find your account ID
+   in the R2 overview page URL or under **Account Home** in the sidebar.
+
+---
+
+## 5. Build + migration
+
+`railway.json` configures a `preDeployCommand` that runs `pnpm db:migrate` via
+Drizzle Kit **before** the new container starts serving traffic on every deploy.
+This means schema migrations are always applied before code that depends on them.
+
+The build command Railway detects automatically from `package.json`:
+- **build**: `next build` (Turbopack, Next.js 16)
+- **start**: `next start`
+- **preDeployCommand**: `pnpm db:migrate`
+
+You do not need to run migrations manually — Railway runs them automatically.
+
+> **Manual fallback** (only if `preDeployCommand` does not execute): open a Railway
+> one-off shell for the app service and run:
+> ```bash
+> pnpm db:migrate
+> ```
+
+---
+
+## 6. Trigger first deploy + confirm
+
+1. Push to the connected branch (or click **Deploy** in the Railway dashboard).
+2. In the **Deploy logs**, you should see `drizzle-kit migrate` output (all tables
+   applied) followed by the Next.js server starting.
+3. Visit your public URL — you should see the login page.
+
+---
+
+## 7. Seed the single admin user (run ONCE, then delete the script)
+
+The app has no self-registration. Seed the one admin account from your local machine
+with `DATABASE_URL`, `BETTER_AUTH_SECRET`, and `BETTER_AUTH_URL` pointing at
+**production**:
+
+```bash
+# Set these to match your Railway env vars:
+export DATABASE_URL="<Railway Postgres connection string>"
+export BETTER_AUTH_SECRET="<your secret>"
+export BETTER_AUTH_URL="https://<your-service>.up.railway.app"
+export SEED_EMAIL="you@example.com"
+export SEED_PASSWORD="<strong password, min 8 chars>"
+export SEED_NAME="Admin"          # optional, defaults to "Admin"
+
+pnpm dlx tsx scripts/seed-user.ts
+```
+
+After the script prints `User created: you@example.com`:
+
+```bash
+git rm scripts/seed-user.ts
+git commit -m "chore: remove seed-user script after first deploy"
+git push
+```
+
+This triggers a re-deploy (migrations are a no-op now that tables exist).
+
+---
+
+## 8. Post-deploy smoke tests (run from a phone)
+
+Once logged in, run through each of the following manually:
+
+- [ ] **R2 round-trip**: upload any audio file → confirm the recording appears in the
+  list and the audio plays back (the file was stored in and retrieved from R2).
+- [ ] **ElevenLabs Scribe**: upload the sample Dutch audio file → confirm transcript
+  segments appear with speaker labels (diarization working).
+- [ ] **OpenAI enhancement**: confirm the recording detail shows a generated title,
+  summary, action items, and key points.
+- [ ] **Full phone end-to-end**: on your phone, open the Railway URL → log in → upload a
+  new Dutch audio clip → wait for transcription + enhancement → verify all four fields
+  appear + audio plays back behind login.
+
+---
+
+## Known footguns
+
+- **Local `next build` / `pnpm dev` without env vars set will throw at import time.**
+  `lib/config.ts` and `auth.ts` read env eagerly; this is intentional — fail fast.
+  Always copy `.env.example` to `.env.local` and fill in real values before running
+  locally.
+
+- **`BETTER_AUTH_URL` and `NEXT_PUBLIC_APP_URL` must be identical** (both = the Railway
+  public URL). Mismatched values cause auth redirects to fail.
+
+- **Single-instance only for Phase 0.** The preDeploy migration is safe for one replica.
+  If you ever scale to multiple replicas, run migrations as a separate one-off task
+  before updating the service.

@@ -3,15 +3,28 @@
 ## Checklist
 
 - [x] Task 1: Scaffold Next.js 16 + pnpm + Vitest + shadcn
-- [ ] Task 2: Drizzle schema + migration + config loader
-- [ ] Task 3: AES-256-GCM secret encryption
-- [ ] Task 4: R2 storage layer
-- [ ] Task 5: ElevenLabs Scribe transcription adapter
-- [ ] Task 6: LLM enhancement layer (Vercel AI SDK)
-- [ ] Task 7: Pipeline route handlers
-- [ ] Task 8: Minimal UI
-- [ ] Task 9: Better Auth (single-user, no email)
+- [x] Task 2: Drizzle schema + migration + config loader
+- [x] Task 3: AES-256-GCM secret encryption
+- [x] Task 4: R2 storage layer
+- [x] Task 5: ElevenLabs Scribe transcription adapter
+- [x] Task 6: LLM enhancement layer (Vercel AI SDK)
+- [x] Task 7: Pipeline route handlers
+- [x] Task 8: Minimal UI
+- [x] Task 9: Better Auth (single-user, no email)
 - [ ] Task 10: Deploy to Railway
+  - [x] `railway.json` with `preDeployCommand` (`pnpm db:migrate`)
+  - [x] `DEPLOY.md` runbook with exact commands
+  - [x] `.env.example` complete (all 12 required vars)
+  - [x] `package.json` `engines` field (`>=20.9.0`)
+  - [ ] **HUMAN STEP**: Provision Railway project + Postgres plugin
+  - [ ] **HUMAN STEP**: Create Cloudflare R2 bucket + API token
+  - [ ] **HUMAN STEP**: Set all env vars in Railway dashboard
+  - [ ] **HUMAN STEP**: Trigger first deploy; confirm migrations apply in build logs
+  - [ ] **HUMAN STEP**: Seed admin user (`pnpm dlx tsx scripts/seed-user.ts`), then delete the script + redeploy
+  - [ ] **HUMAN STEP**: Smoke test — R2 round-trip
+  - [ ] **HUMAN STEP**: Smoke test — ElevenLabs Scribe on Dutch sample
+  - [ ] **HUMAN STEP**: Smoke test — OpenAI enhancement
+  - [ ] **HUMAN STEP**: Full phone end-to-end acceptance test
 
 ## Next.js 16 Gotchas
 

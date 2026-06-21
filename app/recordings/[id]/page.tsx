@@ -10,18 +10,22 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import RetryButton from "./retry-button";
+import { requireSession } from "@/lib/auth-guard";
 
 export default async function RecordingPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireSession();
+
   const { id } = await params;
 
   const [recording, transcription, enhancement] = await Promise.all([
     db.query.recordings.findFirst({ where: eq(recordings.id, id) }),
     db.query.transcriptions.findFirst({
       where: eq(transcriptions.recordingId, id),
+      orderBy: [desc(transcriptions.createdAt)],
     }),
     db.query.aiEnhancements.findFirst({
       where: eq(aiEnhancements.recordingId, id),

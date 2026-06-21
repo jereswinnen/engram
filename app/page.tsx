@@ -9,8 +9,11 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { requireSession } from "@/lib/auth-guard";
 
 export default async function HomePage() {
+  await requireSession();
+
   const recs = await db.query.recordings.findMany({
     orderBy: [desc(recordings.createdAt)],
   });

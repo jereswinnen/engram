@@ -45,7 +45,7 @@ ELEVENLABS_API_KEY=<your ElevenLabs key>
 
 # LLM (OpenAI-compatible)
 OPENAI_API_KEY=<your OpenAI key>
-LLM_MODEL=gpt-4o-mini        # or any openai-compatible model id
+LLM_MODEL=gpt-5.4-mini-2026-03-17
 
 # Cloudflare R2 (see Section 4)
 R2_ENDPOINT=https://<account_id>.r2.cloudflarestorage.com
@@ -112,9 +112,10 @@ You do not need to run migrations manually — Railway runs them automatically.
 
 ## 7. Seed the single admin user (run ONCE, then delete the script)
 
-The app has no self-registration. Seed the one admin account from your local machine
-with `DATABASE_URL`, `BETTER_AUTH_SECRET`, and `BETTER_AUTH_URL` pointing at
-**production**:
+The app has no self-registration (sign-up is disabled). Seed the one admin account
+from your local machine with `DATABASE_URL`, `BETTER_AUTH_SECRET`, and
+`BETTER_AUTH_URL` pointing at **production**. The script bypasses the public
+sign-up endpoint by writing directly via Better Auth's internal adapter:
 
 ```bash
 # Set these to match your Railway env vars:

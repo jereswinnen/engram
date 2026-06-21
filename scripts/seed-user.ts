@@ -12,6 +12,9 @@
  *   pnpm dlx tsx scripts/seed-user.ts
  *
  * After running: delete this file and commit the removal.
+ *
+ * NOTE: Uses auth.$context (internal adapter) so it works even with
+ * disableSignUp: true — the public sign-up endpoint is intentionally closed.
  */
 
 import { auth } from "../auth";
@@ -25,13 +28,37 @@ if (!email || !password) {
   process.exit(1);
 }
 
-try {
-  const result = await auth.api.signUpEmail({
-    body: { email, password, name },
-  });
-  console.log("User created:", result.user.email);
-  console.log("Delete this script before the next commit.");
-} catch (err) {
-  console.error("Seed failed:", err);
+const ctx = await auth.$context;
+
+// Idempotency: error clearly if user already exists
+const existing = await ctx.internalAdapter.findUserByEmail(email);
+if (existing) {
+  console.error(`User already exists: ${email}. Remove this script without re-running.`);
   process.exit(1);
 }
+
+// Hash the password using Better Auth's own hasher (bcrypt by default)
+const hash = await ctx.password.hash(password);
+
+// Create the user row
+const user = await ctx.internalAdapter.createUser({
+  email,
+  name,
+  emailVerified: false,
+});
+
+if (!user) {
+  console.error("Failed to create user.");
+  process.exit(1);
+}
+
+// Link the credential account (same shape the sign-up route uses)
+await ctx.internalAdapter.linkAccount({
+  userId: user.id,
+  providerId: "credential",
+  accountId: user.id,
+  password: hash,
+});
+
+console.log("User created:", user.email);
+console.log("Delete this script before the next commit.");

@@ -9,6 +9,7 @@ export function createR2Storage(): Storage {
     region: "auto",
     endpoint: r2.endpoint,
     credentials: { accessKeyId: r2.accessKeyId, secretAccessKey: r2.secretAccessKey },
+    forcePathStyle: true,
   });
 
   return {

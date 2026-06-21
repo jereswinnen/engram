@@ -4,13 +4,20 @@ import { db } from "@/db";
 import { recordings } from "@/db/schema";
 import { getStorage, buildAudioKey } from "@/lib/storage";
 import { runTranscription, runEnhancement } from "@/lib/pipeline";
+import { auth } from "@/auth";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const session = await auth.api.getSession({ headers: request.headers });
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const rows = await db.query.recordings.findMany();
   return NextResponse.json(rows);
 }
 
 export async function POST(req: NextRequest) {
+  const session = await auth.api.getSession({ headers: req.headers });
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const form = await req.formData();
   const file = form.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "file required" }, { status: 400 });

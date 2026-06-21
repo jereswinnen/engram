@@ -11,20 +11,20 @@
 - [x] Task 7: Pipeline route handlers
 - [x] Task 8: Minimal UI
 - [x] Task 9: Better Auth (single-user, no email)
-- [ ] Task 10: Deploy to Railway
+- [x] Task 10: Deploy to Railway — **LIVE & VALIDATED**
   - [x] `railway.json` with `preDeployCommand` (`pnpm db:migrate`)
   - [x] `DEPLOY.md` runbook with exact commands
   - [x] `.env.example` complete (all 12 required vars)
   - [x] `package.json` `engines` field (`>=20.9.0`)
-  - [ ] **HUMAN STEP**: Provision Railway project + Postgres plugin
-  - [ ] **HUMAN STEP**: Create Cloudflare R2 bucket + API token
-  - [ ] **HUMAN STEP**: Set all env vars in Railway dashboard
-  - [ ] **HUMAN STEP**: Trigger first deploy; confirm migrations apply in build logs
-  - [ ] **HUMAN STEP**: Seed admin user (`pnpm dlx tsx scripts/seed-user.ts`), then delete the script + redeploy
-  - [ ] **HUMAN STEP**: Smoke test — R2 round-trip
-  - [ ] **HUMAN STEP**: Smoke test — ElevenLabs Scribe on Dutch sample
-  - [ ] **HUMAN STEP**: Smoke test — OpenAI enhancement
-  - [ ] **HUMAN STEP**: Full phone end-to-end acceptance test
+  - [x] Provisioned Railway project + Postgres plugin
+  - [x] Created Cloudflare R2 bucket + API token
+  - [x] Set all env vars in Railway dashboard
+  - [x] First deploy; migrations applied (all 11 tables created)
+  - [x] Seeded admin user; seed script removed (commit 5a822f1)
+  - [x] Logged in on live URL
+  - [x] Full phone end-to-end acceptance test PASSED (upload Dutch clip → diarized transcript → Dutch summary → playback). This validated the R2, Scribe, and OpenAI live paths together.
+
+**✅ PHASE 0 COMPLETE.** Next milestone: Phase 1 — Plaud MCP sync (see roadmap below).
 
 ## Remaining Roadmap (post Phase 0)
 

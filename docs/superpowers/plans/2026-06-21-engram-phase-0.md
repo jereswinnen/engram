@@ -22,7 +22,7 @@
 ## File Structure
 
 ```
-src/
+
   db/
     schema.ts            # Drizzle table definitions (all Phase 0 tables)
     index.ts             # db client (postgres.js + drizzle)
@@ -63,7 +63,7 @@ PROGRESS.md              # living build tracker
 ### Task 1: Scaffold project + test harness
 
 **Files:**
-- Create: project root files via `create-next-app`, `vitest.config.ts`, `PROGRESS.md`, `.env.example`, `src/lib/__tests__/smoke.test.ts`
+- Create: project root files via `create-next-app`, `vitest.config.ts`, `PROGRESS.md`, `.env.example`, `lib/__tests__/smoke.test.ts`
 - Modify: `package.json` (scripts), `.gitignore`
 
 **Interfaces:**
@@ -75,7 +75,7 @@ Run in the repo root (it already contains git + docs):
 ```bash
 pnpm dlx create-next-app@latest . --typescript --app --src-dir --no-tailwind --eslint --use-pnpm
 ```
-If the directory-not-empty prompt blocks it, scaffold in a temp dir and copy `src/`, `package.json`, `next.config.*`, `tsconfig.json`, configs over, preserving existing `docs/`, `AGENTS.md`, `.git`. Confirm `pnpm dev` serves the default page, then stop it.
+If the directory-not-empty prompt blocks it, scaffold in a temp dir and copy ``, `package.json`, `next.config.*`, `tsconfig.json`, configs over, preserving existing `docs/`, `AGENTS.md`, `.git`. Confirm `pnpm dev` serves the default page, then stop it.
 
 - [ ] **Step 2: Read the Next.js 16 docs that this plan touches**
 
@@ -96,7 +96,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    include: ["**/*.test.ts"],
   },
 });
 ```
@@ -104,7 +104,7 @@ Add to `package.json` scripts: `"test": "vitest run"`, `"test:watch": "vitest"`.
 
 - [ ] **Step 4: Write a smoke test**
 
-`src/lib/__tests__/smoke.test.ts`:
+`lib/__tests__/smoke.test.ts`:
 ```ts
 import { describe, it, expect } from "vitest";
 
@@ -125,7 +125,7 @@ Expected: 1 passed.
 ```bash
 pnpm dlx shadcn@latest init
 ```
-Accept defaults (this project skipped Tailwind in step 1 — if shadcn requires Tailwind, let it add Tailwind during init; that is expected). Create `PROGRESS.md` with the Phase 0 checklist (the 10 task titles, all unchecked) and `.env.example` listing every env var from `src/lib/config.ts` (added in later tasks) with placeholder values. Ensure `.env` and `.env.local` are in `.gitignore`.
+Accept defaults (this project skipped Tailwind in step 1 — if shadcn requires Tailwind, let it add Tailwind during init; that is expected). Create `PROGRESS.md` with the Phase 0 checklist (the 10 task titles, all unchecked) and `.env.example` listing every env var from `lib/config.ts` (added in later tasks) with placeholder values. Ensure `.env` and `.env.local` are in `.gitignore`.
 
 - [ ] **Step 7: Commit**
 
@@ -139,12 +139,12 @@ git commit -m "chore: scaffold Next.js 16 app with pnpm, Vitest, shadcn"
 ### Task 2: Database schema + Drizzle migration
 
 **Files:**
-- Create: `src/db/schema.ts`, `src/db/index.ts`, `drizzle.config.ts`, `src/lib/config.ts`
-- Test: `src/db/schema.test.ts`
+- Create: `db/schema.ts`, `db/index.ts`, `drizzle.config.ts`, `lib/config.ts`
+- Test: `db/schema.test.ts`
 
 **Interfaces:**
 - Consumes: `DATABASE_URL` from env.
-- Produces: `db` (drizzle client) from `src/db/index.ts`; table objects `recordings`, `transcriptions`, `aiEnhancements`, `apiCredentials`, `storageConfig`, `userSettings`, `syncState` from `src/db/schema.ts`. `recordings` has columns: `id` (uuid pk), `title` (text), `source` (text, default `'upload'`), `storageKey` (text), `contentType` (text), `durationSeconds` (integer, nullable), `status` (text, default `'uploaded'`), `errorMessage` (text, nullable), `plaudFileId` (text, nullable, unique), `createdAt` (timestamp). `transcriptions`: `id`, `recordingId` (fk), `fullText` (text), `language` (text, nullable), `segments` (jsonb), `createdAt`. `aiEnhancements`: `id`, `recordingId` (fk), `kind` (text default `'summary'`), `title` (text, nullable), `summary` (text), `actionItems` (jsonb), `keyPoints` (jsonb), `model` (text), `createdAt`.
+- Produces: `db` (drizzle client) from `db/index.ts`; table objects `recordings`, `transcriptions`, `aiEnhancements`, `apiCredentials`, `storageConfig`, `userSettings`, `syncState` from `db/schema.ts`. `recordings` has columns: `id` (uuid pk), `title` (text), `source` (text, default `'upload'`), `storageKey` (text), `contentType` (text), `durationSeconds` (integer, nullable), `status` (text, default `'uploaded'`), `errorMessage` (text, nullable), `plaudFileId` (text, nullable, unique), `createdAt` (timestamp). `transcriptions`: `id`, `recordingId` (fk), `fullText` (text), `language` (text, nullable), `segments` (jsonb), `createdAt`. `aiEnhancements`: `id`, `recordingId` (fk), `kind` (text default `'summary'`), `title` (text, nullable), `summary` (text), `actionItems` (jsonb), `keyPoints` (jsonb), `model` (text), `createdAt`.
 
 - [ ] **Step 1: Install Drizzle + driver**
 
@@ -153,7 +153,7 @@ pnpm add drizzle-orm postgres
 pnpm add -D drizzle-kit
 ```
 
-- [ ] **Step 2: Write `src/lib/config.ts`**
+- [ ] **Step 2: Write `lib/config.ts`**
 
 ```ts
 function required(name: string): string {
@@ -178,7 +178,7 @@ export const config = {
 ```
 Getters are functions so tests/build don't throw on import when a var is absent.
 
-- [ ] **Step 3: Write `src/db/schema.ts`**
+- [ ] **Step 3: Write `db/schema.ts`**
 
 ```ts
 import { pgTable, uuid, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
@@ -245,9 +245,9 @@ export const syncState = pgTable("sync_state", {
 });
 ```
 
-- [ ] **Step 4: Write `src/db/index.ts` and `drizzle.config.ts`**
+- [ ] **Step 4: Write `db/index.ts` and `drizzle.config.ts`**
 
-`src/db/index.ts`:
+`db/index.ts`:
 ```ts
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
@@ -262,7 +262,7 @@ export const db = drizzle(client, { schema });
 import { defineConfig } from "drizzle-kit";
 
 export default defineConfig({
-  schema: "./src/db/schema.ts",
+  schema: "./db/schema.ts",
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: { url: process.env.DATABASE_URL! },
@@ -272,7 +272,7 @@ Add scripts to `package.json`: `"db:generate": "drizzle-kit generate"`, `"db:mig
 
 - [ ] **Step 5: Write a schema-shape test**
 
-`src/db/schema.test.ts`:
+`db/schema.test.ts`:
 ```ts
 import { describe, it, expect } from "vitest";
 import { recordings, transcriptions, aiEnhancements } from "./schema";
@@ -296,7 +296,7 @@ describe("schema", () => {
 
 - [ ] **Step 6: Run the test (expect PASS)**
 
-Run: `pnpm test src/db/schema.test.ts`
+Run: `pnpm test db/schema.test.ts`
 Expected: 3 passed.
 
 - [ ] **Step 7: Generate + apply the migration**
@@ -320,8 +320,8 @@ git commit -m "feat: add Drizzle schema, db client, and config loader"
 ### Task 3: AES-256-GCM secret encryption
 
 **Files:**
-- Create: `src/lib/crypto/secrets.ts`
-- Test: `src/lib/crypto/secrets.test.ts`
+- Create: `lib/crypto/secrets.ts`
+- Test: `lib/crypto/secrets.test.ts`
 
 **Interfaces:**
 - Consumes: `ENCRYPTION_KEY` (32-byte hex string) via `config.encryptionKey()`.
@@ -329,7 +329,7 @@ git commit -m "feat: add Drizzle schema, db client, and config loader"
 
 - [ ] **Step 1: Write the failing test**
 
-`src/lib/crypto/secrets.test.ts`:
+`lib/crypto/secrets.test.ts`:
 ```ts
 import { describe, it, expect, beforeAll } from "vitest";
 import { encryptSecret, decryptSecret } from "./secrets";
@@ -359,10 +359,10 @@ describe("secrets", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm test src/lib/crypto/secrets.test.ts`
+Run: `pnpm test lib/crypto/secrets.test.ts`
 Expected: FAIL ("Cannot find module './secrets'").
 
-- [ ] **Step 3: Implement `src/lib/crypto/secrets.ts`**
+- [ ] **Step 3: Implement `lib/crypto/secrets.ts`**
 
 ```ts
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
@@ -393,7 +393,7 @@ export function decryptSecret(payload: string): string {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm test src/lib/crypto/secrets.test.ts`
+Run: `pnpm test lib/crypto/secrets.test.ts`
 Expected: 3 passed.
 
 - [ ] **Step 5: Commit**
@@ -408,8 +408,8 @@ git commit -m "feat: add AES-256-GCM secret encryption util"
 ### Task 4: R2 storage layer
 
 **Files:**
-- Create: `src/lib/storage/types.ts`, `src/lib/storage/r2.ts`, `src/lib/storage/index.ts`
-- Test: `src/lib/storage/r2.test.ts` (unit, key-building + presign), plus a documented live round-trip smoke
+- Create: `lib/storage/types.ts`, `lib/storage/r2.ts`, `lib/storage/index.ts`
+- Test: `lib/storage/r2.test.ts` (unit, key-building + presign), plus a documented live round-trip smoke
 
 **Interfaces:**
 - Consumes: `config.r2()`.
@@ -421,7 +421,7 @@ git commit -m "feat: add AES-256-GCM secret encryption util"
 pnpm add @aws-sdk/client-s3 @aws-sdk/s3-request-presigner
 ```
 
-- [ ] **Step 2: Write the interface `src/lib/storage/types.ts`**
+- [ ] **Step 2: Write the interface `lib/storage/types.ts`**
 
 ```ts
 export interface Storage {
@@ -438,7 +438,7 @@ export function buildAudioKey(recordingId: string, filename: string): string {
 
 - [ ] **Step 3: Write the failing test for `buildAudioKey`**
 
-`src/lib/storage/r2.test.ts`:
+`lib/storage/r2.test.ts`:
 ```ts
 import { describe, it, expect } from "vitest";
 import { buildAudioKey } from "./types";
@@ -455,12 +455,12 @@ describe("buildAudioKey", () => {
 
 - [ ] **Step 4: Run test to verify it fails**
 
-Run: `pnpm test src/lib/storage/r2.test.ts`
+Run: `pnpm test lib/storage/r2.test.ts`
 Expected: FAIL ("Cannot find module './types'").
 
-- [ ] **Step 5: Implement `src/lib/storage/r2.ts` and `index.ts`**
+- [ ] **Step 5: Implement `lib/storage/r2.ts` and `index.ts`**
 
-`src/lib/storage/r2.ts`:
+`lib/storage/r2.ts`:
 ```ts
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -488,7 +488,7 @@ export function createR2Storage(): Storage {
   };
 }
 ```
-`src/lib/storage/index.ts`:
+`lib/storage/index.ts`:
 ```ts
 import { createR2Storage } from "./r2";
 import type { Storage } from "./types";
@@ -504,7 +504,7 @@ export type { Storage } from "./types";
 
 - [ ] **Step 6: Run test to verify it passes**
 
-Run: `pnpm test src/lib/storage/r2.test.ts`
+Run: `pnpm test lib/storage/r2.test.ts`
 Expected: 2 passed.
 
 - [ ] **Step 7: Live round-trip smoke (requires R2 creds)**
@@ -525,7 +525,7 @@ Expected: prints `GET hello` then `ok`. Record result in `PROGRESS.md`.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/lib/storage
+git add lib/storage
 git commit -m "feat: add R2 storage interface and adapter"
 ```
 
@@ -534,14 +534,14 @@ git commit -m "feat: add R2 storage interface and adapter"
 ### Task 5: ElevenLabs Scribe transcription adapter
 
 **Files:**
-- Create: `src/lib/transcription/types.ts`, `src/lib/transcription/scribe.ts`
-- Test: `src/lib/transcription/scribe.test.ts`
+- Create: `lib/transcription/types.ts`, `lib/transcription/scribe.ts`
+- Test: `lib/transcription/scribe.test.ts`
 
 **Interfaces:**
 - Consumes: `config.elevenLabsApiKey()`. Source for the port: `docs/elevenlabs-provider.ts`.
 - Produces: `TranscriptSegment { start; end; text; speaker? }`, `TranscriptResult { text; language?; segments; raw? }`, `wordsToSegments(words): TranscriptSegment[]` (exported for testing), and `transcribeWithScribe(input: { cloudStorageUrl?: string; audioData?: Blob; filename?: string }, options): Promise<TranscriptResult>`.
 
-- [ ] **Step 1: Write `src/lib/transcription/types.ts`**
+- [ ] **Step 1: Write `lib/transcription/types.ts`**
 
 ```ts
 export interface TranscriptSegment { start: number; end: number; text: string; speaker?: string; }
@@ -550,7 +550,7 @@ export interface TranscriptResult { text: string; language?: string; segments: T
 
 - [ ] **Step 2: Write the failing test for `wordsToSegments`**
 
-`src/lib/transcription/scribe.test.ts`:
+`lib/transcription/scribe.test.ts`:
 ```ts
 import { describe, it, expect } from "vitest";
 import { wordsToSegments } from "./scribe";
@@ -580,16 +580,16 @@ describe("wordsToSegments", () => {
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `pnpm test src/lib/transcription/scribe.test.ts`
+Run: `pnpm test lib/transcription/scribe.test.ts`
 Expected: FAIL ("Cannot find module './scribe'").
 
-- [ ] **Step 4: Implement `src/lib/transcription/scribe.ts`**
+- [ ] **Step 4: Implement `lib/transcription/scribe.ts`**
 
 Port `docs/elevenlabs-provider.ts`: copy `ScribeWord`, `ScribeResponse`, `wordsToSegments` (export it), and `transcribeWithScribe` verbatim, changing imports to use `./types` for `TranscriptResult`/`TranscriptSegment` and replacing the inline `apiKey` option with a default from `config.elevenLabsApiKey()`. Keep `diarize` defaulting to `true`, `model_id` defaulting to `"scribe_v2"`, and leave `language_code` unset by default (Dutch auto-detect). Prefer the `cloud_storage_url` path (presigned R2 GET).
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `pnpm test src/lib/transcription/scribe.test.ts`
+Run: `pnpm test lib/transcription/scribe.test.ts`
 Expected: 2 passed.
 
 - [ ] **Step 6: Live smoke (requires ELEVENLABS_API_KEY + sample file)**
@@ -599,7 +599,7 @@ Upload the sample Dutch clip to R2 (reuse Task 4's storage), presign it, and cal
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/lib/transcription
+git add lib/transcription
 git commit -m "feat: add ElevenLabs Scribe transcription adapter"
 ```
 
@@ -608,8 +608,8 @@ git commit -m "feat: add ElevenLabs Scribe transcription adapter"
 ### Task 6: LLM enhancement layer (Vercel AI SDK)
 
 **Files:**
-- Create: `src/lib/ai/schema.ts`, `src/lib/ai/enhance.ts`
-- Test: `src/lib/ai/enhance.test.ts`
+- Create: `lib/ai/schema.ts`, `lib/ai/enhance.ts`
+- Test: `lib/ai/enhance.test.ts`
 
 **Interfaces:**
 - Consumes: `config.openAiApiKey()`, `config.llmModel()`, a transcript string.
@@ -621,7 +621,7 @@ git commit -m "feat: add ElevenLabs Scribe transcription adapter"
 pnpm add ai @ai-sdk/openai zod
 ```
 
-- [ ] **Step 2: Write `src/lib/ai/schema.ts`**
+- [ ] **Step 2: Write `lib/ai/schema.ts`**
 
 ```ts
 import { z } from "zod";
@@ -638,7 +638,7 @@ export type Enhancement = z.infer<typeof enhancementSchema>;
 
 - [ ] **Step 3: Write the failing test (schema validation, no network)**
 
-`src/lib/ai/enhance.test.ts`:
+`lib/ai/enhance.test.ts`:
 ```ts
 import { describe, it, expect } from "vitest";
 import { enhancementSchema } from "./schema";
@@ -661,10 +661,10 @@ describe("enhancementSchema", () => {
 
 - [ ] **Step 4: Run test to verify it fails**
 
-Run: `pnpm test src/lib/ai/enhance.test.ts`
+Run: `pnpm test lib/ai/enhance.test.ts`
 Expected: FAIL ("Cannot find module './schema'").
 
-- [ ] **Step 5: Implement `src/lib/ai/enhance.ts`**
+- [ ] **Step 5: Implement `lib/ai/enhance.ts`**
 
 ```ts
 import { generateObject } from "ai";
@@ -692,7 +692,7 @@ export async function enhanceTranscript(
 
 - [ ] **Step 6: Run test to verify it passes**
 
-Run: `pnpm test src/lib/ai/enhance.test.ts`
+Run: `pnpm test lib/ai/enhance.test.ts`
 Expected: 2 passed.
 
 - [ ] **Step 7: Live smoke (requires OPENAI_API_KEY)**
@@ -702,7 +702,7 @@ Run `enhanceTranscript` against the Task 5 sample transcript. Verify Dutch outpu
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/lib/ai
+git add lib/ai
 git commit -m "feat: add LLM enhancement layer via Vercel AI SDK"
 ```
 
@@ -711,12 +711,12 @@ git commit -m "feat: add LLM enhancement layer via Vercel AI SDK"
 ### Task 7: Pipeline route handlers
 
 **Files:**
-- Create: `src/app/api/recordings/route.ts`, `src/app/api/recordings/[id]/transcribe/route.ts`, `src/app/api/recordings/[id]/enhance/route.ts`, `src/app/api/recordings/[id]/audio/route.ts`, `src/lib/pipeline.ts`
-- Test: `src/lib/pipeline.test.ts`
+- Create: `app/api/recordings/route.ts`, `app/api/recordings/[id]/transcribe/route.ts`, `app/api/recordings/[id]/enhance/route.ts`, `app/api/recordings/[id]/audio/route.ts`, `lib/pipeline.ts`
+- Test: `lib/pipeline.test.ts`
 
 **Interfaces:**
 - Consumes: `db`, `getStorage`, `buildAudioKey`, `transcribeWithScribe`, `enhanceTranscript`.
-- Produces: `runTranscription(recordingId: string): Promise<void>` and `runEnhancement(recordingId: string): Promise<void>` in `src/lib/pipeline.ts` (status transitions + persistence, testable with mocks). Route handlers thin-wrap these. `POST /api/recordings` (multipart: `file`, `title?`) → creates row, stores audio, kicks transcription. `GET /api/recordings` → list. `POST /api/recordings/[id]/transcribe`, `POST .../enhance` → re-run a stage. `GET /api/recordings/[id]/audio` → 302 to presigned URL.
+- Produces: `runTranscription(recordingId: string): Promise<void>` and `runEnhancement(recordingId: string): Promise<void>` in `lib/pipeline.ts` (status transitions + persistence, testable with mocks). Route handlers thin-wrap these. `POST /api/recordings` (multipart: `file`, `title?`) → creates row, stores audio, kicks transcription. `GET /api/recordings` → list. `POST /api/recordings/[id]/transcribe`, `POST .../enhance` → re-run a stage. `GET /api/recordings/[id]/audio` → 302 to presigned URL.
 
 - [ ] **Step 1: Read the Next.js 16 route-handler docs**
 
@@ -727,7 +727,7 @@ Confirm the exact `route.ts` export signature and how dynamic `params` are acces
 
 - [ ] **Step 2: Write the failing test for `runTranscription` status flow**
 
-`src/lib/pipeline.test.ts` (mock db + adapters; verify status transitions and that a thrown adapter sets `status='error'`):
+`lib/pipeline.test.ts` (mock db + adapters; verify status transitions and that a thrown adapter sets `status='error'`):
 ```ts
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -768,10 +768,10 @@ describe("runTranscription", () => {
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `pnpm test src/lib/pipeline.test.ts`
+Run: `pnpm test lib/pipeline.test.ts`
 Expected: FAIL ("Cannot find module './pipeline'").
 
-- [ ] **Step 4: Implement `src/lib/pipeline.ts`**
+- [ ] **Step 4: Implement `lib/pipeline.ts`**
 
 ```ts
 import { eq } from "drizzle-orm";
@@ -821,12 +821,12 @@ export async function runEnhancement(id: string): Promise<void> {
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `pnpm test src/lib/pipeline.test.ts`
+Run: `pnpm test lib/pipeline.test.ts`
 Expected: 2 passed.
 
 - [ ] **Step 6: Implement the route handlers**
 
-Use the Next.js 16 signatures confirmed in Step 1. `src/app/api/recordings/route.ts`:
+Use the Next.js 16 signatures confirmed in Step 1. `app/api/recordings/route.ts`:
 ```ts
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
@@ -858,7 +858,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ id: rec.id }, { status: 201 });
 }
 ```
-(Add `import { eq } from "drizzle-orm";`.) `src/app/api/recordings/[id]/transcribe/route.ts` and `.../enhance/route.ts` call `runTranscription`/`runEnhancement` for the param id and return `{ ok: true }`. `src/app/api/recordings/[id]/audio/route.ts` looks up the recording, presigns its `storageKey`, and returns `NextResponse.redirect(url)`.
+(Add `import { eq } from "drizzle-orm";`.) `app/api/recordings/[id]/transcribe/route.ts` and `.../enhance/route.ts` call `runTranscription`/`runEnhancement` for the param id and return `{ ok: true }`. `app/api/recordings/[id]/audio/route.ts` looks up the recording, presigns its `storageKey`, and returns `NextResponse.redirect(url)`.
 
 - [ ] **Step 7: Run the full suite (expect PASS)**
 
@@ -877,8 +877,8 @@ git commit -m "feat: add recording pipeline routes (upload/transcribe/enhance/au
 ### Task 8: Minimal UI
 
 **Files:**
-- Create: `src/app/page.tsx`, `src/app/upload/page.tsx`, `src/app/recordings/[id]/page.tsx`
-- Modify: `src/app/layout.tsx` (nav link)
+- Create: `app/page.tsx`, `app/upload/page.tsx`, `app/recordings/[id]/page.tsx`
+- Modify: `app/layout.tsx` (nav link)
 - Add shadcn components as needed.
 
 **Interfaces:**
@@ -890,15 +890,15 @@ git commit -m "feat: add recording pipeline routes (upload/transcribe/enhance/au
 pnpm dlx shadcn@latest add button card input
 ```
 
-- [ ] **Step 2: Recordings list `src/app/page.tsx`**
+- [ ] **Step 2: Recordings list `app/page.tsx`**
 
 Server component: query `db.query.recordings.findMany()` (newest first), render a `Card` per recording with title, created date, and `status` badge, linking to `/recordings/[id]`. Include a header link to `/upload`.
 
-- [ ] **Step 3: Upload form `src/app/upload/page.tsx`**
+- [ ] **Step 3: Upload form `app/upload/page.tsx`**
 
 Client component with a file `Input`, optional title `Input`, and a submit `Button` that POSTs `FormData` to `/api/recordings`, then redirects to `/recordings/[id]` on the returned id. Show a basic uploading state.
 
-- [ ] **Step 4: Detail page `src/app/recordings/[id]/page.tsx`**
+- [ ] **Step 4: Detail page `app/recordings/[id]/page.tsx`**
 
 Server component (use the Next.js 16 async-params form from Task 7 Step 1): load the recording, its transcription, and its latest `ai_enhancements` row. Render:
 - An HTML5 `<audio controls src="/api/recordings/[id]/audio">`.
@@ -922,8 +922,8 @@ git commit -m "feat: add minimal recordings UI (list, upload, detail)"
 ### Task 9: Better Auth (single-user, no email)
 
 **Files:**
-- Create: `src/auth.ts`, `src/app/api/auth/[...all]/route.ts`, `src/app/login/page.tsx`, `src/middleware.ts`, `src/lib/auth-client.ts`
-- Modify: `src/db/schema.ts` (Better Auth tables via its generator) + migration
+- Create: `auth.ts`, `app/api/auth/[...all]/route.ts`, `app/login/page.tsx`, `middleware.ts`, `lib/auth-client.ts`
+- Modify: `db/schema.ts` (Better Auth tables via its generator) + migration
 
 **Interfaces:**
 - Produces: a protected app — all routes except `/login` and `/api/auth/*` require a session. Single seeded user; sign-in via email/password (verification off) and optional passkey.
@@ -935,7 +935,7 @@ Invoke the `better-auth-best-practices` skill (and `better-auth-security-best-pr
 pnpm add better-auth
 ```
 
-- [ ] **Step 2: Configure `src/auth.ts`**
+- [ ] **Step 2: Configure `auth.ts`**
 
 Single-user, email/password, **`emailVerification` disabled, no email reset**, Drizzle adapter against `db`. Optionally enable the passkey plugin. Set `BETTER_AUTH_SECRET` (generate: `openssl rand -hex 32`) and `BETTER_AUTH_URL` in `.env`. Follow the exact shape the skill specifies (it overrides any guess here).
 
@@ -945,7 +945,7 @@ Use Better Auth's CLI/generator to emit its tables, then `pnpm db:generate && pn
 
 - [ ] **Step 4: Mount the handler + middleware**
 
-`src/app/api/auth/[...all]/route.ts` mounts Better Auth's handler. `src/middleware.ts` redirects unauthenticated requests to `/login` (allowlist `/login`, `/api/auth`). `src/app/login/page.tsx` is an email/password form (+ passkey button if enabled) using `src/lib/auth-client.ts`.
+`app/api/auth/[...all]/route.ts` mounts Better Auth's handler. `middleware.ts` redirects unauthenticated requests to `/login` (allowlist `/login`, `/api/auth`). `app/login/page.tsx` is an email/password form (+ passkey button if enabled) using `lib/auth-client.ts`.
 
 - [ ] **Step 5: Seed the single user**
 

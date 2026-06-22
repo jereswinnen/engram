@@ -2,26 +2,23 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 
 type LastResult = { ranAt: string; newCount: number; skippedCount: number; failedCount: number; error?: string } | null;
 
-export function PlaudSettings({ connected, lastResult }: { connected: boolean; lastResult: LastResult }) {
+export function PlaudSettings({ connected, lastResult, oauthStatus }: { connected: boolean; lastResult: LastResult; oauthStatus: string | null }) {
   const router = useRouter();
-  const [token, setToken] = useState("");
-  const [status, setStatus] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(
+    oauthStatus === "connected" ? "Plaud verbonden." : oauthStatus === "error" ? "Verbinden met Plaud mislukt." : null,
+  );
   const [busy, setBusy] = useState(false);
 
-  async function saveToken() {
-    setBusy(true); setStatus(null);
+  async function disconnect() {
+    setBusy(true);
     try {
-      const res = await fetch("/api/plaud/token", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token }) });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "kon token niet opslaan");
-      setToken("");
-      setStatus(json.valid ? "Token opgeslagen en geldig." : "Token opgeslagen (kon niet valideren).");
+      await fetch("/api/plaud/disconnect", { method: "POST" });
+      setStatus("Verbinding verbroken.");
       router.refresh();
-    } catch (e) { setStatus((e as Error).message); } finally { setBusy(false); }
+    } finally { setBusy(false); }
   }
 
   async function syncNow() {
@@ -31,6 +28,7 @@ export function PlaudSettings({ connected, lastResult }: { connected: boolean; l
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "sync mislukt");
       setStatus(json.error ? `Sync: ${json.error}` : `Sync klaar — ${json.newCount} nieuw, ${json.skippedCount} overgeslagen, ${json.failedCount} mislukt.`);
+      router.refresh();
     } catch (e) { setStatus((e as Error).message); } finally { setBusy(false); }
   }
 
@@ -38,13 +36,12 @@ export function PlaudSettings({ connected, lastResult }: { connected: boolean; l
     <section className="space-y-4">
       <div className="space-y-2">
         <h2 className="font-medium">Plaud-koppeling</h2>
-        <p className="text-sm text-muted-foreground">
-          Status: {connected ? "verbonden" : "niet verbonden"}. Plak je sessietoken van web.plaud.ai (localStorage <code>tokenstr</code>).
-        </p>
-        <div className="flex gap-2">
-          <Input type="password" placeholder="bearer eyJ…" value={token} onChange={(e) => setToken(e.target.value)} />
-          <Button onClick={saveToken} disabled={busy || token.trim().length < 20}>Opslaan</Button>
-        </div>
+        <p className="text-sm text-muted-foreground">Status: {connected ? "verbonden" : "niet verbonden"}.</p>
+        {connected ? (
+          <Button variant="outline" onClick={disconnect} disabled={busy}>Verbinding verbreken</Button>
+        ) : (
+          <Button asChild><a href="/api/plaud/connect">Verbind met Plaud</a></Button>
+        )}
       </div>
 
       <div className="space-y-2">

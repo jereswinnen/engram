@@ -10,7 +10,6 @@ export const config = {
   elevenLabsApiKey: () => required("ELEVENLABS_API_KEY"),
   openAiApiKey: () => required("OPENAI_API_KEY"),
   llmModel: () => process.env.LLM_MODEL ?? "gpt-5.4-mini-2026-03-17",
-  plaudApiBase: () => process.env.PLAUD_API_BASE ?? "https://api.plaud.ai",
   plaudRedirectUrl: () => `${required("NEXT_PUBLIC_APP_URL")}/api/plaud/callback`,
   r2: () => ({
     endpoint: required("R2_ENDPOINT"),

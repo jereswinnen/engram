@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { PlaudRecording } from "./types";
+import type { PlaudFile } from "./mcp/types";
 
-function rec(p: Partial<PlaudRecording> & { fileId: string; startAtMs: number }): PlaudRecording {
-  return { name: p.fileId, startAt: new Date(p.startAtMs).toISOString(), trashed: false, ...p };
+function rec(p: Partial<PlaudFile> & { fileId: string; startAtMs: number }): PlaudFile {
+  return { name: p.fileId, trashed: false, ...p };
 }
 
 describe("selectNewRecordings", () => {
@@ -21,19 +21,14 @@ describe("selectNewRecordings", () => {
 });
 
 // Orchestration: mock all IO collaborators.
-const calls: any = { stored: [], inserted: [], transcribed: [], enhanced: [], syncStateSet: [] };
-vi.mock("./client", () => ({
-  PlaudAuthError: class PlaudAuthError extends Error {},
-  listRecordings: vi.fn(),
-  getRecordingDetail: vi.fn(async (_t: string, id: string) => ({
-    fileId: id, name: id, startAt: "x", startAtMs: 0, trashed: false, audioUrl: `https://signed/${id}`,
-  })),
-  downloadAudio: vi.fn(async (url: string) => {
-    if (calls.failUrl === url) throw new Error("download failed");
-    return { bytes: Buffer.from("x"), contentType: "audio/mpeg" };
-  }),
+const calls: any = {};
+vi.mock("./mcp/client", () => ({
+  isConnected: vi.fn(async () => calls.connected ?? true),
+  connect: vi.fn(async () => { if (calls.connectThrows) throw new Error("UnauthorizedError"); return { close: vi.fn(async () => {}) }; }),
+  listFiles: vi.fn(async () => calls.files ?? []),
+  getFile: vi.fn(async (_c: any, id: string) => ({ fileId: id, name: id, startAtMs: 0, trashed: false, presignedUrl: `https://signed/${id}` })),
+  downloadAudio: vi.fn(async (url: string) => { if (calls.failUrl === url) throw new Error("download failed"); return { bytes: Buffer.from("x"), contentType: "audio/mpeg" }; }),
 }));
-vi.mock("./credentials", () => ({ getPlaudToken: vi.fn(async () => "token") }));
 vi.mock("@/lib/storage", () => ({
   getStorage: () => ({ put: vi.fn(async (k: string) => {
     if (calls.failPut) throw new Error("storage put failed");
@@ -61,15 +56,15 @@ beforeEach(() => {
   calls.stored = []; calls.inserted = []; calls.transcribed = []; calls.enhanced = [];
   calls.syncStateSet = []; calls.existing = []; calls.syncRow = { id: "s1", lastSyncedAt: null, lastResult: null };
   calls.findFirstResult = undefined; calls.failUrl = undefined; calls.deleted = []; calls.failPut = undefined;
+  calls.connected = true; calls.connectThrows = false; calls.files = [];
 });
 
 describe("syncPlaud", () => {
   it("ingests new recordings through the pipeline and advances the checkpoint", async () => {
-    const client = await import("./client");
-    (client.listRecordings as any).mockResolvedValueOnce([
-      { fileId: "f1", name: "One", startAt: "x", startAtMs: 1000, trashed: false },
-      { fileId: "f2", name: "Two", startAt: "x", startAtMs: 2000, trashed: false },
-    ]);
+    calls.files = [
+      { fileId: "f1", name: "One", startAtMs: 1000, trashed: false },
+      { fileId: "f2", name: "Two", startAtMs: 2000, trashed: false },
+    ];
     const { syncPlaud } = await import("./sync");
     const result = await syncPlaud();
     expect(result.newCount).toBe(2);
@@ -84,12 +79,11 @@ describe("syncPlaud", () => {
 
   it("skips trashed + already-present and counts skips", async () => {
     calls.existing = [{ plaudFileId: "f1" }];
-    const client = await import("./client");
-    (client.listRecordings as any).mockResolvedValueOnce([
-      { fileId: "f1", name: "dup", startAt: "x", startAtMs: 1000, trashed: false },
-      { fileId: "f2", name: "trash", startAt: "x", startAtMs: 2000, trashed: true },
-      { fileId: "f3", name: "new", startAt: "x", startAtMs: 3000, trashed: false },
-    ]);
+    calls.files = [
+      { fileId: "f1", name: "dup", startAtMs: 1000, trashed: false },
+      { fileId: "f2", name: "trash", startAtMs: 2000, trashed: true },
+      { fileId: "f3", name: "new", startAtMs: 3000, trashed: false },
+    ];
     const { syncPlaud } = await import("./sync");
     const result = await syncPlaud();
     expect(result.newCount).toBe(1);
@@ -97,12 +91,20 @@ describe("syncPlaud", () => {
     expect(calls.transcribed).toEqual(["rec-0"]);
   });
 
-  it("on PlaudAuthError records reconnect-needed and does NOT advance the checkpoint", async () => {
-    const client = await import("./client");
-    (client.listRecordings as any).mockRejectedValueOnce(new client.PlaudAuthError("401"));
+  it("connect throws → reconnect, checkpoint not advanced", async () => {
+    calls.connectThrows = true;
     const { syncPlaud } = await import("./sync");
     const result = await syncPlaud();
     expect(result.error).toMatch(/reconnect/i);
+    const lastSet = calls.syncStateSet.at(-1);
+    expect(lastSet.lastSyncedAt).toBeUndefined(); // only lastResult written, not checkpoint
+  });
+
+  it("not connected → error message, checkpoint not advanced", async () => {
+    calls.connected = false;
+    const { syncPlaud } = await import("./sync");
+    const result = await syncPlaud();
+    expect(result.error).toMatch(/not connected/i);
     const lastSet = calls.syncStateSet.at(-1);
     expect(lastSet.lastSyncedAt).toBeUndefined(); // only lastResult written, not checkpoint
   });
@@ -111,12 +113,11 @@ describe("syncPlaud", () => {
     // f1=1000 succeeds, f2=2000 fails (download throws), f3=3000 succeeds
     // checkpoint must be set to earliestFailureMs - 1 = 1999 so f2 is retried next sync
     calls.failUrl = "https://signed/f2";
-    const client = await import("./client");
-    (client.listRecordings as any).mockResolvedValueOnce([
-      { fileId: "f1", name: "One", startAt: "x", startAtMs: 1000, trashed: false },
-      { fileId: "f2", name: "Two", startAt: "x", startAtMs: 2000, trashed: false },
-      { fileId: "f3", name: "Three", startAt: "x", startAtMs: 3000, trashed: false },
-    ]);
+    calls.files = [
+      { fileId: "f1", name: "One", startAtMs: 1000, trashed: false },
+      { fileId: "f2", name: "Two", startAtMs: 2000, trashed: false },
+      { fileId: "f3", name: "Three", startAtMs: 3000, trashed: false },
+    ];
     const { syncPlaud } = await import("./sync");
     const result = await syncPlaud();
     expect(result.newCount).toBe(2);
@@ -127,10 +128,9 @@ describe("syncPlaud", () => {
 
   it("does not run enhancement when transcription status is not 'transcribed'", async () => {
     calls.findFirstResult = { status: "error" };
-    const client = await import("./client");
-    (client.listRecordings as any).mockResolvedValueOnce([
-      { fileId: "f1", name: "One", startAt: "x", startAtMs: 1000, trashed: false },
-    ]);
+    calls.files = [
+      { fileId: "f1", name: "One", startAtMs: 1000, trashed: false },
+    ];
     const { syncPlaud } = await import("./sync");
     const result = await syncPlaud();
     expect(result.newCount).toBe(1);
@@ -139,10 +139,9 @@ describe("syncPlaud", () => {
 
   it("deletes the orphan row when storage put fails after insert", async () => {
     calls.failPut = true;
-    const client = await import("./client");
-    (client.listRecordings as any).mockResolvedValueOnce([
-      { fileId: "f1", name: "One", startAt: "x", startAtMs: 1000, trashed: false },
-    ]);
+    calls.files = [
+      { fileId: "f1", name: "One", startAtMs: 1000, trashed: false },
+    ];
     const { syncPlaud } = await import("./sync");
     const result = await syncPlaud();
     expect(result.failedCount).toBe(1);

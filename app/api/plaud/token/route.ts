@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { savePlaudToken, hasPlaudToken } from "@/lib/plaud/credentials";
-import { validateToken } from "@/lib/plaud/client";
 
 export async function GET(request: NextRequest) {
   const session = await auth.api.getSession({ headers: request.headers });
@@ -23,8 +22,6 @@ export async function POST(request: NextRequest) {
   if (!trimmed || trimmed.length < 20) {
     return NextResponse.json({ error: "token required" }, { status: 400 });
   }
-  // Best-effort validation; still save (lets the user save even if validate is flaky).
-  const valid = await validateToken(trimmed).catch(() => false);
   await savePlaudToken(trimmed);
-  return NextResponse.json({ connected: true, valid });
+  return NextResponse.json({ connected: true });
 }

@@ -17,6 +17,9 @@ export interface PlaudRecordingDetail extends PlaudRecording {
 export function mapRecording(raw: any): PlaudRecording {
   const startRaw = raw.start_at ?? raw.start_time ?? raw.created_at;
   const startAtMs = typeof startRaw === "number" ? startRaw : Date.parse(startRaw);
+  if (Number.isNaN(startAtMs)) {
+    throw new Error(`mapRecording: no recognizable date field in ${JSON.stringify(raw)}`);
+  }
   return {
     fileId: String(raw.id ?? raw.file_id),
     name: raw.name ?? raw.title ?? "Untitled",
@@ -28,5 +31,9 @@ export function mapRecording(raw: any): PlaudRecording {
 }
 
 export function mapRecordingDetail(raw: any): PlaudRecordingDetail {
-  return { ...mapRecording(raw), audioUrl: raw.presigned_url ?? raw.url ?? raw.audio_url };
+  const audioUrl = raw.presigned_url ?? raw.url ?? raw.audio_url;
+  if (!audioUrl) {
+    throw new Error(`mapRecordingDetail: no audio URL field in ${JSON.stringify(raw)}`);
+  }
+  return { ...mapRecording(raw), audioUrl };
 }

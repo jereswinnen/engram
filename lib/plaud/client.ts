@@ -61,7 +61,8 @@ export async function validateToken(token: string): Promise<boolean> {
   try {
     await plaudFetch(token, PATHS.currentUser);
     return true;
-  } catch {
-    return false;
+  } catch (err) {
+    if (err instanceof PlaudAuthError) return false;
+    throw err;
   }
 }

@@ -1,3 +1,5 @@
+> ⚠️ SUPERSEDED — the reverse-engineered approach was abandoned (the Plaud MCP is free). See the official-MCP spec/plan dated 2026-06-22. Kept for history only.
+
 # Engram — Phase 1 Design: Plaud Sync (reverse-engineered)
 
 **Date:** 2026-06-22

@@ -15,9 +15,13 @@ export function PlaudSettings({ connected, lastResult, oauthStatus }: { connecte
   async function disconnect() {
     setBusy(true);
     try {
-      await fetch("/api/plaud/disconnect", { method: "POST" });
-      setStatus("Verbinding verbroken.");
-      router.refresh();
+      const res = await fetch("/api/plaud/disconnect", { method: "POST" });
+      if (res.ok) {
+        setStatus("Verbinding verbroken.");
+        router.refresh();
+      } else {
+        setStatus("Verbinding verbreken mislukt.");
+      }
     } finally { setBusy(false); }
   }
 

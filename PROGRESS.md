@@ -31,43 +31,46 @@
 > Phase 0 code is complete and merged to `main`. Phase 1 is now complete (env vars + cron
 > wiring + docs). See `DEPLOY.md` Section "Phase 1 — Plaud sync" for the full user guide.
 
-### Phase 1 — Plaud sync + real device (makes capture automatic)
+### Phase 1 — Plaud MCP sync + real device (makes capture automatic)
 
-**Design pivot:** Original plan used the official Plaud MCP (`mcp.plaud.ai`), which is
-gated behind Plaud's paid **Unlimited** plan. User declined paying Plaud's premium tier,
-so Phase 1 pivots to the **reverse-engineered private API** (`api.plaud.ai`) — a common
-interop practice; same approach as Riffado and plaud-sync-for-obsidian. Engram implements
-clean-room from observed network calls (no AGPL code copied). Full rationale in
-[Phase 1 design spec](docs/superpowers/specs/2026-06-22-engram-phase-1-plaud-sync-design.md).
+**Design:** Phase 1 uses the **official Plaud MCP** (`mcp.plaud.ai`) with interactive OAuth
+(no paste token). This provides a clean, standards-based integration with Plaud's recorder
+network. Full design + plan in
+[Phase 1 MCP spec](docs/superpowers/specs/2026-06-22-engram-phase-1-plaud-mcp-design.md) and
+[Phase 1 MCP plan](docs/superpowers/plans/2026-06-22-engram-phase-1-plaud-mcp.md).
 
 #### Implementation (COMPLETE)
 
-- [x] **Token auth** — paste session token from `web.plaud.ai`, AES-encrypted storage in
-      `api_credentials`, never echoed in UI. (`lib/plaud/credentials.ts` + Settings UI)
-- [x] **Plaud sync client** — `validateToken`, `listRecordings`, `getRecordingDetail`,
-      `downloadAudio` via `api.plaud.ai`; client tolerant of extra/missing fields until
-      real data finalizes mapping. (`lib/plaud/client.ts`)
-- [x] **Sync orchestration** — checkpoint on `start_time`, dedup on `plaud_file_id`,
-      skip trashed, per-item error isolation, reuse Phase 0 pipeline (Scribe + LLM).
+- [x] **MCP client + SDK** — Plaud MCP transport layer, tool definitions, response types.
+      (`lib/plaud/mcp/` + SDK integration)
+- [x] **OAuth auth** — interactive authorize → callback → encrypted credentials storage in
+      `api_credentials`. (`lib/plaud/oauth.ts`, `app/api/plaud/callback/route.ts`, Settings UI)
+- [x] **MCP client methods** — `listFiles`, `getFile`, `downloadAudio` via Plaud MCP tools;
+      client tolerant of response-field variance until real data validates mapping.
+      (`lib/plaud/client.ts`)
+- [x] **Sync orchestration** — checkpoint on `startAtMs`, dedup on `fileId`, skip trashed,
+      per-item error isolation, reuse Phase 0 pipeline (Scribe + LLM).
       (`lib/plaud/sync.ts` + `app/api/sync/route.ts`)
 - [x] **Cron auth gate** — `/api/sync` authorized by session (manual button) **or**
       `CRON_SECRET` bearer header (cron); else 401. (`app/api/sync/auth.test.ts`)
-- [x] **Env vars** — `PLAUD_API_BASE` (optional, default `https://api.plaud.ai`) and
-      `CRON_SECRET` (required, generated). (`.env.example`, `railway.json` ready for
-      dashboard cron config, `DEPLOY.md` step-by-step)
-- [x] **Settings UI** — paste token, show connection status, manual "Sync now" button,
-      last-sync result (counts + timestamp + error state). (`app/settings/page.tsx`)
+- [x] **Env var** — `CRON_SECRET` (required, generated).
+      (`.env.example`, `railway.json` ready for dashboard cron config, `DEPLOY.md` step-by-step)
+- [x] **Settings UI** — OAuth connect/disconnect button, show connection status, manual
+      "Sync now" button, last-sync result (counts + timestamp + error state).
+      (`app/settings/page.tsx`)
 
 #### Verification (DEFERRED, human steps)
 
-- [ ] **Token validate + list working live** — Test with "Sync now" button on Settings
-      when you have no/few recordings. Shows 0 new without error = ready.
-- [ ] **Full download + transcribe + enhance** — Sync after your first real Plaud
-      recording. Finalizes API field mapping in `lib/plaud/types.ts` and
-      `lib/plaud/client.ts` (client is tolerant until then).
-- [ ] **Device onboarding** — enable Plaud Private Cloud Sync + Wi-Fi charging-sync on
-      your device; verify Desktop app → cloud → Engram → enhanced summary flow. (Out of
-      scope for Phase 1, deferred to Phase 2 device story.)
+- [ ] **OAuth authorize + list working live** — In Settings click "Verbind met Plaud",
+      complete OAuth authorize, confirm "Verbonden" status and "Sync now" returns 0 new
+      without error = ready.
+- [ ] **Full download + transcribe + enhance** — Sync after your first real Plaud recording.
+      Validates end-to-end MCP→download→transcribe→enhance pipeline and finalizes response
+      field mappings in `lib/plaud/mcp/types.ts` and `lib/plaud/client.ts` (client is tolerant
+      until then).
+- [ ] **Device onboarding** — enable Plaud Private Cloud Sync + Wi-Fi charging-sync on your
+      device; verify Desktop app → cloud → Engram → enhanced summary flow. (Out of scope for
+      Phase 1, deferred to Phase 2 device story.)
 
 ### Phase 1+ — deferred UX features
 

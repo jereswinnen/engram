@@ -58,7 +58,8 @@ export async function syncPlaud(): Promise<SyncResult> {
   let client;
   try {
     client = await connect();
-  } catch {
+  } catch (e) {
+    console.error("[plaud sync] connect failed", e);
     const result = { ...base, error: "reconnect needed — Plaud authorization expired" };
     await writeResult(row.id, result); // checkpoint not advanced
     return result;
@@ -70,6 +71,7 @@ export async function syncPlaud(): Promise<SyncResult> {
       const dateFrom = row.lastSyncedAt ? new Date(row.lastSyncedAt).toISOString() : undefined;
       all = await listFiles(client, dateFrom ? { date_from: dateFrom } : {});
     } catch (e) {
+      console.error("[plaud sync] list_files failed", e);
       const result = { ...base, error: (e as Error).message };
       await writeResult(row.id, result); // checkpoint not advanced
       return result;
@@ -85,6 +87,7 @@ export async function syncPlaud(): Promise<SyncResult> {
     let failedCount = 0;
     let maxSuccessMs = checkpointMs;
     let earliestFailureMs = Infinity;
+    let firstItemError: string | undefined;
 
     for (const r of candidates) {
       let insertedId: string | undefined;
@@ -113,9 +116,12 @@ export async function syncPlaud(): Promise<SyncResult> {
 
         newCount++;
         if (r.startAtMs > maxSuccessMs) maxSuccessMs = r.startAtMs;
-      } catch {
+      } catch (e) {
         failedCount++;
         earliestFailureMs = Math.min(earliestFailureMs, r.startAtMs);
+        const msg = e instanceof Error ? e.message : String(e);
+        if (firstItemError === undefined) firstItemError = msg;
+        console.error("[plaud sync] item failed", r.fileId, msg);
         if (insertedId) {
           try { await db.delete(recordings).where(eq(recordings.id, insertedId)); } catch {}
         }
@@ -124,7 +130,10 @@ export async function syncPlaud(): Promise<SyncResult> {
 
     const newCheckpointMs =
       earliestFailureMs === Infinity ? maxSuccessMs : Math.max(checkpointMs, earliestFailureMs - 1);
-    const result: SyncResult = { ranAt, newCount, skippedCount, failedCount };
+    const result: SyncResult = {
+      ranAt, newCount, skippedCount, failedCount,
+      ...(failedCount > 0 && firstItemError ? { error: `first failure: ${firstItemError}` } : {}),
+    };
     await db.update(syncState).set({ lastSyncedAt: new Date(newCheckpointMs), lastResult: result }).where(eq(syncState.id, row.id));
     return result;
   } finally {

@@ -55,4 +55,26 @@ describe("client http", () => {
     vi.spyOn(global, "fetch").mockResolvedValue(new Response("nope", { status: 401 }));
     expect(await validateToken("bad")).toBe(false);
   });
+  it("skips individually-bad records and returns only the good ones", async () => {
+    const { listRecordings } = await import("./client");
+    vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: [
+        { id: "f1", start_at: "2026-06-01T10:00:00Z" }, // good
+        { id: "f2" },                                     // no date → mapRecording throws
+      ] }), { status: 200 }),
+    );
+    const res = await listRecordings("token");
+    expect(res).toHaveLength(1);
+    expect(res[0].fileId).toBe("f1");
+  });
+  it("throws when all records in a non-empty list are unmappable", async () => {
+    const { listRecordings } = await import("./client");
+    vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: [
+        { id: "f1" }, // no date → throws
+        { id: "f2" }, // no date → throws
+      ] }), { status: 200 }),
+    );
+    await expect(listRecordings("token")).rejects.toThrow();
+  });
 });

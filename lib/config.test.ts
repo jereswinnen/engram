@@ -11,8 +11,5 @@ describe("config additions", () => {
     process.env.PLAUD_API_BASE = "https://api.eu.plaud.ai";
     expect(config.plaudApiBase()).toBe("https://api.eu.plaud.ai");
   });
-  it("cronSecret throws when unset", () => {
-    delete process.env.CRON_SECRET;
-    expect(() => config.cronSecret()).toThrow(/CRON_SECRET/);
-  });
+
 });

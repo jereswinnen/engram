@@ -35,7 +35,10 @@ vi.mock("./client", () => ({
 }));
 vi.mock("./credentials", () => ({ getPlaudToken: vi.fn(async () => "token") }));
 vi.mock("@/lib/storage", () => ({
-  getStorage: () => ({ put: vi.fn(async (k: string) => { calls.stored.push(k); }) }),
+  getStorage: () => ({ put: vi.fn(async (k: string) => {
+    if (calls.failPut) throw new Error("storage put failed");
+    calls.stored.push(k);
+  }) }),
   buildAudioKey: (id: string, f: string) => `audio/${id}.${f.split(".").pop()}`,
 }));
 vi.mock("@/lib/pipeline", () => ({
@@ -46,6 +49,7 @@ vi.mock("@/db", () => ({
   db: {
     insert: () => ({ values: () => ({ returning: async () => { const id = `rec-${calls.inserted.length}`; calls.inserted.push(id); return [{ id }]; } }) }),
     update: () => ({ set: (v: any) => ({ where: async () => { calls.syncStateSet.push(v); } }) }),
+    delete: () => ({ where: async () => { calls.deleted.push(true); } }),
     query: {
       recordings: { findMany: async () => calls.existing ?? [], findFirst: async () => calls.findFirstResult ?? { status: "transcribed" } },
       syncState: { findFirst: async () => calls.syncRow ?? { id: "s1", lastSyncedAt: null, lastResult: null } },
@@ -56,7 +60,7 @@ vi.mock("@/db", () => ({
 beforeEach(() => {
   calls.stored = []; calls.inserted = []; calls.transcribed = []; calls.enhanced = [];
   calls.syncStateSet = []; calls.existing = []; calls.syncRow = { id: "s1", lastSyncedAt: null, lastResult: null };
-  calls.findFirstResult = undefined; calls.failUrl = undefined;
+  calls.findFirstResult = undefined; calls.failUrl = undefined; calls.deleted = []; calls.failPut = undefined;
 });
 
 describe("syncPlaud", () => {
@@ -131,5 +135,18 @@ describe("syncPlaud", () => {
     const result = await syncPlaud();
     expect(result.newCount).toBe(1);
     expect(calls.enhanced).toHaveLength(0);
+  });
+
+  it("deletes the orphan row when storage put fails after insert", async () => {
+    calls.failPut = true;
+    const client = await import("./client");
+    (client.listRecordings as any).mockResolvedValueOnce([
+      { fileId: "f1", name: "One", startAt: "x", startAtMs: 1000, trashed: false },
+    ]);
+    const { syncPlaud } = await import("./sync");
+    const result = await syncPlaud();
+    expect(result.failedCount).toBe(1);
+    expect(result.newCount).toBe(0);
+    expect(calls.deleted).toHaveLength(1);
   });
 });

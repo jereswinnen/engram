@@ -39,7 +39,17 @@ function extractArray(json: any): any[] {
 
 export async function listRecordings(token: string): Promise<PlaudRecording[]> {
   const res = await plaudFetch(token, PATHS.listFiles);
-  return extractArray(await res.json()).map(mapRecording);
+  const rawItems = extractArray(await res.json());
+  const out: PlaudRecording[] = [];
+  let firstError: unknown;
+  for (const raw of rawItems) {
+    try { out.push(mapRecording(raw)); }
+    catch (e) { if (firstError === undefined) firstError = e; }
+  }
+  if (rawItems.length > 0 && out.length === 0) {
+    throw firstError instanceof Error ? firstError : new Error("listRecordings: no recordings could be mapped");
+  }
+  return out;
 }
 
 export async function getRecordingDetail(token: string, fileId: string): Promise<PlaudRecordingDetail> {

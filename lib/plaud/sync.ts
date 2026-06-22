@@ -79,6 +79,7 @@ export async function syncPlaud(): Promise<SyncResult> {
   let earliestFailureMs = Infinity;
 
   for (const r of candidates) {
+    let insertedId: string | undefined;
     try {
       const detail = await getRecordingDetail(token, r.fileId);
       const { bytes, contentType } = await downloadAudio(detail.audioUrl);
@@ -93,6 +94,7 @@ export async function syncPlaud(): Promise<SyncResult> {
           plaudFileId: r.fileId,
         })
         .returning();
+      insertedId = rec.id;
       const key = buildAudioKey(rec.id, `x.${extFromContentType(contentType)}`);
       await getStorage().put(key, bytes, contentType);
       await db.update(recordings).set({ storageKey: key }).where(eq(recordings.id, rec.id));
@@ -106,6 +108,9 @@ export async function syncPlaud(): Promise<SyncResult> {
     } catch {
       failedCount++;
       earliestFailureMs = Math.min(earliestFailureMs, r.startAtMs);
+      if (insertedId) {
+        try { await db.delete(recordings).where(eq(recordings.id, insertedId)); } catch {}
+      }
     }
   }
 

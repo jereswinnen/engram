@@ -15,7 +15,12 @@ interface PlaudOAuthState {
 
 async function load(): Promise<PlaudOAuthState> {
   const row = await db.query.apiCredentials.findFirst({ where: eq(apiCredentials.provider, PROVIDER) });
-  return row ? (JSON.parse(decryptSecret(row.ciphertext)) as PlaudOAuthState) : {};
+  if (!row) return {};
+  try {
+    return JSON.parse(decryptSecret(row.ciphertext)) as PlaudOAuthState;
+  } catch {
+    return {}; // corrupt/undecryptable (e.g. key rotation) → treat as not connected
+  }
 }
 
 async function save(state: PlaudOAuthState): Promise<void> {
@@ -26,6 +31,7 @@ async function save(state: PlaudOAuthState): Promise<void> {
     .onConflictDoUpdate({ target: apiCredentials.provider, set: { ciphertext } });
 }
 
+// Note: setters perform non-atomic load→mutate→save. Safe because MCP SDK drives OAuth flow sequentially.
 export const plaudAuthStore = {
   async getTokens() { return (await load()).tokens; },
   async saveTokens(tokens: OAuthTokens) { const s = await load(); s.tokens = tokens; await save(s); },

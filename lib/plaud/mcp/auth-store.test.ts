@@ -13,15 +13,17 @@ vi.mock("@/db", () => ({
 beforeEach(() => { store.row = undefined; process.env.ENCRYPTION_KEY = "0".repeat(64); });
 
 describe("plaudAuthStore", () => {
-  it("round-trips tokens / clientInfo / codeVerifier through encryption", async () => {
+  it("round-trips tokens / clientInfo / codeVerifier / authorizationUrl through encryption", async () => {
     const { plaudAuthStore } = await import("./auth-store");
     await plaudAuthStore.saveTokens({ access_token: "a", token_type: "bearer" } as any);
     await plaudAuthStore.saveClientInfo({ client_id: "c1" } as any);
     await plaudAuthStore.saveCodeVerifier("verifier-123");
+    await plaudAuthStore.saveAuthorizationUrl("https://plaud.example/authorize?x=1");
     expect(store.row!.ciphertext).not.toContain("verifier-123"); // encrypted at rest
     expect((await plaudAuthStore.getTokens())?.access_token).toBe("a");
     expect((await plaudAuthStore.getClientInfo())?.client_id).toBe("c1");
     expect(await plaudAuthStore.getCodeVerifier()).toBe("verifier-123");
+    expect(await plaudAuthStore.getAuthorizationUrl()).toBe("https://plaud.example/authorize?x=1");
     expect(await plaudAuthStore.isConnected()).toBe(true);
   });
   it("isConnected is false with no tokens; clear() wipes state", async () => {

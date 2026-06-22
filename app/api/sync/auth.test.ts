@@ -26,4 +26,11 @@ describe("isAuthorized", () => {
     const { isAuthorized } = await import("./route");
     expect(await isAuthorized(req({}))).toBe(true);
   });
+  it("rejects 'Bearer undefined' when CRON_SECRET is unset and no session", async () => {
+    delete process.env.CRON_SECRET;
+    const { auth } = await import("@/auth");
+    (auth.api.getSession as any).mockResolvedValueOnce(null);
+    const { isAuthorized } = await import("./route");
+    expect(await isAuthorized(req({ authorization: "Bearer undefined" }))).toBe(false);
+  });
 });

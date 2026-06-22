@@ -157,6 +157,110 @@ Once logged in, run through each of the following manually:
 
 ---
 
+## Phase 1 — Plaud sync
+
+Engram can now automatically pull recordings from your Plaud account (using the
+**private `api.plaud.ai` API** with a paste-in session token) and run them through the
+Phase 0 pipeline (Scribe transcription + LLM enhancement). This section covers setup.
+
+### 1. Get your Plaud session token
+
+1. Log in to [web.plaud.ai](https://web.plaud.ai) in your browser.
+2. Open the browser **Developer Console** (`F12` or `Cmd+Opt+I`).
+3. Paste into the console:
+   ```javascript
+   localStorage.getItem("tokenstr")
+   ```
+4. Copy the entire long string (a JWT token) — this is your session token.
+
+### 2. Set Phase 1 env vars in Railway
+
+In the Railway app service, add these two new variables under **Variables**:
+
+- **`PLAUD_API_BASE`** — Optional; defaults to `https://api.plaud.ai`. If Plaud's API
+  region differs, use the correct base URL here. For most users: **use the default**
+  (leave unset or set to `https://api.plaud.ai`).
+
+- **`CRON_SECRET`** — Required. This is a shared secret that authorizes the cron job to
+  call `/api/sync`. Generate locally:
+  ```bash
+  openssl rand -hex 32
+  ```
+  Copy the output and paste it as the value. Store this securely; you'll need it for the
+  cron schedule below. Do **not** commit it to git.
+
+> **Note:** Do not set `PLAUD_API_BASE` in `.env.example` with a real token or secret
+> — keep `.env.example` for templates only. Only real Railway variables go in the
+> dashboard.
+
+### 3. Paste your Plaud token in Engram Settings
+
+1. Log in to your Engram instance (deployed on Railway).
+2. Click **Settings** in the header.
+3. Under **Plaud Sync**, paste the token you copied from `web.plaud.ai` in Step 1.
+4. Click **Save** — Engram will validate the token and show connection status.
+5. If you see "Connected" (or a green checkmark), you're ready to sync.
+6. If you see "Error" or "Reconnect needed", the token may be expired or invalid —
+   repeat Step 1 to grab a fresh token.
+
+> **Note:** Engram **never stores or echoes your full token** — it encrypts it with AES-256
+> and stores only the ciphertext. The UI shows only the last 4 characters.
+
+### 4. Manual sync (optional, for testing)
+
+- On the **Settings** page under **Plaud Sync**, click the **"Sync now"** button to
+  trigger an immediate sync. This uses your logged-in session for authorization.
+- The sync will list all new recordings from your Plaud account (since the last sync
+  checkpoint), download each audio, insert them into Engram, and run transcription +
+  enhancement via the existing Phase 0 pipeline.
+
+### 5. Automated sync via cron (Railway)
+
+To sync **automatically on a schedule**, configure a Railway **cron job** that calls
+`POST /api/sync` every 15 minutes (or your preferred interval).
+
+Railway crons are managed via the **Railway dashboard** (not yet in `railway.json` schema).
+
+1. In the Railway dashboard, go to **Deployments** → your app service.
+2. In the left sidebar, select **Cron Jobs** (or navigate to the service **Settings**).
+3. Create a new cron job with these settings:
+   - **Schedule:** `*/15 * * * *` (every 15 minutes. Adjust as needed.)
+   - **Command:**
+     ```bash
+     curl -fsS -X POST https://<your-service>.up.railway.app/api/sync \
+       -H "Authorization: Bearer <CRON_SECRET>"
+     ```
+     Replace `<your-service>` with your Railway public domain (e.g., `engram.up.railway.app`)
+     and `<CRON_SECRET>` with the secret you generated in Step 2 above.
+
+> **Tip:** Use the exact `CRON_SECRET` value from Railway's **Variables** section for
+> this header. The cron job runs outside your app container, so it can't read env vars
+> directly — pass it explicitly in the command.
+
+### 6. Verify the sync works
+
+After setting `CRON_SECRET` and creating the cron job:
+- **Manual verify:** Log in to Engram → **Settings** → click **"Sync now"** and watch
+  the last-sync timestamp and counts update.
+- **Auto verify:** Wait 15 minutes (or your cron interval) and check Settings to see if
+  the "Last synced at" timestamp advances. If it stays the same, check the Railway cron
+  job logs for errors.
+
+### 7. Live-verification checklist (deferred until first real recording)
+
+The Plaud API integration is complete, but a few field names and behaviors are
+finalized only when you sync a real recording:
+
+- [ ] **Token validation + list working live** — Test with the "Sync now" button if you
+      have no recordings yet; Engram will show "0 new" and should not error.
+- [ ] **Download + transcribe + enhance** — Sync after making your first test recording
+      on Plaud. Engram will download the audio, run it through Scribe (transcription),
+      and enhance it with LLM. This finalizes the Plaud API field mappings in
+      `lib/plaud/types.ts` and `lib/plaud/client.ts` (currently tolerant of extra/missing
+      fields; field names become locked once tested against real data).
+
+---
+
 ## Known footguns
 
 - **Local `next build` / `pnpm dev` without env vars set will throw at import time.**
@@ -170,3 +274,7 @@ Once logged in, run through each of the following manually:
 - **Single-instance only for Phase 0.** The preDeploy migration is safe for one replica.
   If you ever scale to multiple replicas, run migrations as a separate one-off task
   before updating the service.
+
+- **`CRON_SECRET` is a production secret.** Do not commit it to git or `.env.local`.
+  Store it only in Railway's **Variables** dashboard. If compromised, regenerate it
+  with `openssl rand -hex 32`, update Railway, and restart the cron job.

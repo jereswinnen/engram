@@ -36,6 +36,12 @@ export default function RootLayout({
             >
               Uploaden
             </Link>
+            <Link
+              href="/settings"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Instellingen
+            </Link>
             <div className="ml-auto">
               <LogoutButton />
             </div>

@@ -1,11 +1,13 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 type LastResult = { ranAt: string; newCount: number; skippedCount: number; failedCount: number; error?: string } | null;
 
 export function PlaudSettings({ connected, lastResult }: { connected: boolean; lastResult: LastResult }) {
+  const router = useRouter();
   const [token, setToken] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -18,6 +20,7 @@ export function PlaudSettings({ connected, lastResult }: { connected: boolean; l
       if (!res.ok) throw new Error(json.error ?? "kon token niet opslaan");
       setToken("");
       setStatus(json.valid ? "Token opgeslagen en geldig." : "Token opgeslagen (kon niet valideren).");
+      router.refresh();
     } catch (e) { setStatus((e as Error).message); } finally { setBusy(false); }
   }
 

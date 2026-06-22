@@ -28,7 +28,10 @@ vi.mock("./client", () => ({
   getRecordingDetail: vi.fn(async (_t: string, id: string) => ({
     fileId: id, name: id, startAt: "x", startAtMs: 0, trashed: false, audioUrl: `https://signed/${id}`,
   })),
-  downloadAudio: vi.fn(async () => ({ bytes: Buffer.from("x"), contentType: "audio/mpeg" })),
+  downloadAudio: vi.fn(async (url: string) => {
+    if (calls.failUrl === url) throw new Error("download failed");
+    return { bytes: Buffer.from("x"), contentType: "audio/mpeg" };
+  }),
 }));
 vi.mock("./credentials", () => ({ getPlaudToken: vi.fn(async () => "token") }));
 vi.mock("@/lib/storage", () => ({
@@ -44,7 +47,7 @@ vi.mock("@/db", () => ({
     insert: () => ({ values: () => ({ returning: async () => { const id = `rec-${calls.inserted.length}`; calls.inserted.push(id); return [{ id }]; } }) }),
     update: () => ({ set: (v: any) => ({ where: async () => { calls.syncStateSet.push(v); } }) }),
     query: {
-      recordings: { findMany: async () => calls.existing ?? [], findFirst: async () => ({ status: "transcribed" }) },
+      recordings: { findMany: async () => calls.existing ?? [], findFirst: async () => calls.findFirstResult ?? { status: "transcribed" } },
       syncState: { findFirst: async () => calls.syncRow ?? { id: "s1", lastSyncedAt: null, lastResult: null } },
     },
   },
@@ -53,6 +56,7 @@ vi.mock("@/db", () => ({
 beforeEach(() => {
   calls.stored = []; calls.inserted = []; calls.transcribed = []; calls.enhanced = [];
   calls.syncStateSet = []; calls.existing = []; calls.syncRow = { id: "s1", lastSyncedAt: null, lastResult: null };
+  calls.findFirstResult = undefined; calls.failUrl = undefined;
 });
 
 describe("syncPlaud", () => {
@@ -97,5 +101,35 @@ describe("syncPlaud", () => {
     expect(result.error).toMatch(/reconnect/i);
     const lastSet = calls.syncStateSet.at(-1);
     expect(lastSet.lastSyncedAt).toBeUndefined(); // only lastResult written, not checkpoint
+  });
+
+  it("never advances checkpoint past the earliest failure", async () => {
+    // f1=1000 succeeds, f2=2000 fails (download throws), f3=3000 succeeds
+    // checkpoint must be set to earliestFailureMs - 1 = 1999 so f2 is retried next sync
+    calls.failUrl = "https://signed/f2";
+    const client = await import("./client");
+    (client.listRecordings as any).mockResolvedValueOnce([
+      { fileId: "f1", name: "One", startAt: "x", startAtMs: 1000, trashed: false },
+      { fileId: "f2", name: "Two", startAt: "x", startAtMs: 2000, trashed: false },
+      { fileId: "f3", name: "Three", startAt: "x", startAtMs: 3000, trashed: false },
+    ]);
+    const { syncPlaud } = await import("./sync");
+    const result = await syncPlaud();
+    expect(result.newCount).toBe(2);
+    expect(result.failedCount).toBe(1);
+    const lastSet = calls.syncStateSet.at(-1);
+    expect(new Date(lastSet.lastSyncedAt).getTime()).toBe(1999);
+  });
+
+  it("does not run enhancement when transcription status is not 'transcribed'", async () => {
+    calls.findFirstResult = { status: "error" };
+    const client = await import("./client");
+    (client.listRecordings as any).mockResolvedValueOnce([
+      { fileId: "f1", name: "One", startAt: "x", startAtMs: 1000, trashed: false },
+    ]);
+    const { syncPlaud } = await import("./sync");
+    const result = await syncPlaud();
+    expect(result.newCount).toBe(1);
+    expect(calls.enhanced).toHaveLength(0);
   });
 });

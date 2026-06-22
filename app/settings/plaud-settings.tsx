@@ -8,7 +8,7 @@ type LastResult = { ranAt: string; newCount: number; skippedCount: number; faile
 export function PlaudSettings({ connected, lastResult, oauthStatus }: { connected: boolean; lastResult: LastResult; oauthStatus: string | null }) {
   const router = useRouter();
   const [status, setStatus] = useState<string | null>(
-    oauthStatus === "connected" ? "Plaud verbonden." : oauthStatus === "error" ? "Verbinden met Plaud mislukt." : null,
+    oauthStatus === "connected" ? "Plaud connected." : oauthStatus === "error" ? "Failed to connect to Plaud." : null,
   );
   const [busy, setBusy] = useState(false);
 
@@ -17,21 +17,21 @@ export function PlaudSettings({ connected, lastResult, oauthStatus }: { connecte
     try {
       const res = await fetch("/api/plaud/disconnect", { method: "POST" });
       if (res.ok) {
-        setStatus("Verbinding verbroken.");
+        setStatus("Disconnected.");
         router.refresh();
       } else {
-        setStatus("Verbinding verbreken mislukt.");
+        setStatus("Failed to disconnect.");
       }
     } finally { setBusy(false); }
   }
 
   async function syncNow() {
-    setBusy(true); setStatus("Bezig met synchroniseren…");
+    setBusy(true); setStatus("Syncing…");
     try {
       const res = await fetch("/api/sync", { method: "POST" });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "sync mislukt");
-      setStatus(json.error ? `Sync: ${json.error}` : `Sync klaar — ${json.newCount} nieuw, ${json.skippedCount} overgeslagen, ${json.failedCount} mislukt.`);
+      if (!res.ok) throw new Error(json.error ?? "sync failed");
+      setStatus(json.error ? `Sync: ${json.error}` : `Sync complete — ${json.newCount} new, ${json.skippedCount} skipped, ${json.failedCount} failed.`);
       router.refresh();
     } catch (e) { setStatus((e as Error).message); } finally { setBusy(false); }
   }
@@ -39,20 +39,20 @@ export function PlaudSettings({ connected, lastResult, oauthStatus }: { connecte
   return (
     <section className="space-y-4">
       <div className="space-y-2">
-        <h2 className="font-medium">Plaud-koppeling</h2>
-        <p className="text-sm text-muted-foreground">Status: {connected ? "verbonden" : "niet verbonden"}.</p>
+        <h2 className="font-medium">Plaud connection</h2>
+        <p className="text-sm text-muted-foreground">Status: {connected ? "connected" : "not connected"}.</p>
         {connected ? (
-          <Button variant="outline" onClick={disconnect} disabled={busy}>Verbinding verbreken</Button>
+          <Button variant="outline" onClick={disconnect} disabled={busy}>Disconnect</Button>
         ) : (
-          <Button asChild><a href="/api/plaud/connect">Verbind met Plaud</a></Button>
+          <Button asChild><a href="/api/plaud/connect">Connect Plaud</a></Button>
         )}
       </div>
 
       <div className="space-y-2">
-        <Button onClick={syncNow} disabled={busy || !connected}>Nu synchroniseren</Button>
+        <Button onClick={syncNow} disabled={busy || !connected}>Sync now</Button>
         {lastResult && (
           <p className="text-sm text-muted-foreground">
-            Laatste sync: {new Date(lastResult.ranAt).toLocaleString("nl-BE")} — {lastResult.error ?? `${lastResult.newCount} nieuw, ${lastResult.skippedCount} overgeslagen, ${lastResult.failedCount} mislukt`}
+            Last sync: {new Date(lastResult.ranAt).toLocaleString("en-GB")} — {lastResult.error ?? `${lastResult.newCount} new, ${lastResult.skippedCount} skipped, ${lastResult.failedCount} failed`}
           </p>
         )}
       </div>

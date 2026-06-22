@@ -25,7 +25,7 @@ function LoginForm() {
     });
 
     if (signInError) {
-      setError(signInError.message ?? "Aanmelden mislukt. Probeer opnieuw.");
+      setError(signInError.message ?? "Sign-in failed. Please try again.");
       setPending(false);
       return;
     }
@@ -42,12 +42,12 @@ function LoginForm() {
       <div className="w-full max-w-sm space-y-6">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Engram</h1>
-          <p className="text-sm text-muted-foreground">Meld je aan om verder te gaan.</p>
+          <p className="text-sm text-muted-foreground">Sign in to continue.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <label htmlFor="email" className="text-sm font-medium">E-mailadres</label>
+            <label htmlFor="email" className="text-sm font-medium">Email address</label>
             <Input
               id="email"
               type="email"
@@ -55,12 +55,12 @@ function LoginForm() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="jij@voorbeeld.be"
+              placeholder="you@example.com"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="password" className="text-sm font-medium">Wachtwoord</label>
+            <label htmlFor="password" className="text-sm font-medium">Password</label>
             <Input
               id="password"
               type="password"
@@ -77,7 +77,7 @@ function LoginForm() {
           )}
 
           <Button type="submit" className="w-full" disabled={pending}>
-            {pending ? "Bezig…" : "Aanmelden"}
+            {pending ? "Signing in…" : "Sign in"}
           </Button>
         </form>
       </div>

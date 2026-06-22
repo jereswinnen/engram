@@ -44,7 +44,7 @@ export default async function RecordingPage({
         href="/"
         className="text-sm text-muted-foreground hover:underline self-start"
       >
-        ← Opnames
+        ← Recordings
       </Link>
 
       <h1 className="text-xl font-semibold">{recording.title}</h1>
@@ -56,11 +56,11 @@ export default async function RecordingPage({
       {isError && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-destructive">Fout</CardTitle>
+            <CardTitle className="text-destructive">Error</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <p className="text-sm text-destructive">
-              {recording.errorMessage ?? "Onbekende fout"}
+              {recording.errorMessage ?? "Unknown error"}
             </p>
             <RetryButton recordingId={id} />
           </CardContent>
@@ -71,7 +71,7 @@ export default async function RecordingPage({
       <Card>
         <CardHeader>
           <CardTitle>
-            {isDone && enhancement?.title ? enhancement.title : "Samenvatting"}
+            {isDone && enhancement?.title ? enhancement.title : "Summary"}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -80,7 +80,7 @@ export default async function RecordingPage({
               <p className="text-sm">{enhancement.summary}</p>
               {enhancement.actionItems.length > 0 && (
                 <div>
-                  <p className="text-sm font-medium mb-1">Actiepunten</p>
+                  <p className="text-sm font-medium mb-1">Action items</p>
                   <ul className="list-disc pl-4 text-sm flex flex-col gap-1">
                     {enhancement.actionItems.map((item, i) => (
                       <li key={i}>{item}</li>
@@ -90,7 +90,7 @@ export default async function RecordingPage({
               )}
               {enhancement.keyPoints.length > 0 && (
                 <div>
-                  <p className="text-sm font-medium mb-1">Kernpunten</p>
+                  <p className="text-sm font-medium mb-1">Key points</p>
                   <ul className="list-disc pl-4 text-sm flex flex-col gap-1">
                     {enhancement.keyPoints.map((point, i) => (
                       <li key={i}>{point}</li>
@@ -100,7 +100,7 @@ export default async function RecordingPage({
               )}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">in behandeling…</p>
+            <p className="text-sm text-muted-foreground">processing…</p>
           )}
         </CardContent>
       </Card>

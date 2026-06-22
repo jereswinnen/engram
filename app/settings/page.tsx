@@ -10,7 +10,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const sync = await db.query.syncState.findFirst();
   return (
     <section className="mx-auto max-w-2xl p-6 space-y-6">
-      <h1 className="text-2xl font-semibold">Instellingen</h1>
+      <h1 className="text-2xl font-semibold">Settings</h1>
       <PlaudSettings connected={connected} lastResult={sync?.lastResult ?? null} oauthStatus={plaud ?? null} />
     </section>
   );

@@ -16,7 +16,7 @@ export default function UploadPage() {
     const data = new FormData(e.currentTarget);
     const file = data.get("file") as File | null;
     if (!file || file.size === 0) {
-      setError("Kies een audiobestand.");
+      setError("Please select an audio file.");
       return;
     }
     setUploading(true);
@@ -26,15 +26,15 @@ export default function UploadPage() {
       if (!res.ok) {
         const msg = await res
           .json()
-          .then((d: { error?: string }) => d.error ?? "Fout bij uploaden")
-          .catch(() => "Fout bij uploaden");
+          .then((d: { error?: string }) => d.error ?? "Upload failed")
+          .catch(() => "Upload failed");
         setError(msg);
         return;
       }
       const { id } = (await res.json()) as { id: string };
       router.push(`/recordings/${id}`);
     } catch {
-      setError("Netwerkfout. Probeer opnieuw.");
+      setError("Network error. Please try again.");
     } finally {
       setUploading(false);
     }
@@ -46,31 +46,31 @@ export default function UploadPage() {
         href="/"
         className="text-sm text-muted-foreground hover:underline mb-6 inline-block"
       >
-        ← Terug
+        ← Back
       </Link>
-      <h1 className="text-xl font-semibold mb-4">Opname uploaden</h1>
+      <h1 className="text-xl font-semibold mb-4">Upload recording</h1>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <label htmlFor="file" className="text-sm font-medium">
-            Audiobestand
+            Audio file
           </label>
           <Input id="file" name="file" type="file" accept="audio/*" required />
         </div>
         <div className="flex flex-col gap-1.5">
           <label htmlFor="title" className="text-sm font-medium">
-            Titel{" "}
-            <span className="text-muted-foreground font-normal">(optioneel)</span>
+            Title{" "}
+            <span className="text-muted-foreground font-normal">(optional)</span>
           </label>
           <Input
             id="title"
             name="title"
             type="text"
-            placeholder="Gebruik bestandsnaam als titel"
+            placeholder="Use filename as title"
           />
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <Button type="submit" disabled={uploading}>
-          {uploading ? "Uploaden…" : "Uploaden"}
+          {uploading ? "Uploading…" : "Upload"}
         </Button>
       </form>
     </div>

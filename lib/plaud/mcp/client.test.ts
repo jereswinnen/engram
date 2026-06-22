@@ -42,7 +42,7 @@ describe("getFile", () => {
   it("calls get_file and maps the detail", async () => {
     const client = { callTool: vi.fn(async () => toolResult({ id: "f1", start_at: "2026-06-01T10:00:00Z", presigned_url: "https://signed/f1.mp3" })) } as any;
     const detail = await getFile(client, "f1");
-    expect(client.callTool).toHaveBeenCalledWith({ name: "get_file", arguments: { id: "f1" } });
+    expect(client.callTool).toHaveBeenCalledWith({ name: "get_file", arguments: { file_id: "f1" } });
     expect(detail.presignedUrl).toBe("https://signed/f1.mp3");
   });
 });

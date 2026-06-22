@@ -96,7 +96,8 @@ export async function syncPlaud(): Promise<SyncResult> {
       await db.update(recordings).set({ storageKey: key }).where(eq(recordings.id, rec.id));
 
       await runTranscription(rec.id);
-      await runEnhancement(rec.id);
+      const stored = await db.query.recordings.findFirst({ where: eq(recordings.id, rec.id) });
+      if (stored?.status === "transcribed") await runEnhancement(rec.id);
 
       newCount++;
       if (r.startAtMs > maxStartMs) maxStartMs = r.startAtMs;

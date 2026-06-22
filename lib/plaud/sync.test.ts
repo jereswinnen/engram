@@ -44,7 +44,7 @@ vi.mock("@/db", () => ({
     insert: () => ({ values: () => ({ returning: async () => { const id = `rec-${calls.inserted.length}`; calls.inserted.push(id); return [{ id }]; } }) }),
     update: () => ({ set: (v: any) => ({ where: async () => { calls.syncStateSet.push(v); } }) }),
     query: {
-      recordings: { findMany: async () => calls.existing ?? [] },
+      recordings: { findMany: async () => calls.existing ?? [], findFirst: async () => ({ status: "transcribed" }) },
       syncState: { findFirst: async () => calls.syncRow ?? { id: "s1", lastSyncedAt: null, lastResult: null } },
     },
   },

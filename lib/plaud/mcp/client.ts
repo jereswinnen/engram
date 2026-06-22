@@ -24,13 +24,15 @@ export async function finishAuth(code: string): Promise<void> {
 
 /** Begin OAuth: triggers the SDK to store the authorize URL, which we return for a browser redirect. */
 export async function beginAuth(): Promise<string> {
+  await plaudAuthStore.saveAuthorizationUrl(""); // clear any stale URL — only return one freshly produced by this attempt
+  let connectError: unknown;
   try {
-    await connect(); // no tokens → provider.redirectToAuthorization stores the URL, then connect throws
-  } catch {
-    // expected on first connect without tokens
+    await connect(); // no tokens → provider.redirectToAuthorization stores a fresh URL, then connect throws
+  } catch (e) {
+    connectError = e;
   }
   const url = await plaudAuthStore.getAuthorizationUrl();
-  if (!url) throw new Error("Failed to obtain Plaud authorization URL");
+  if (!url) throw connectError ?? new Error("Failed to obtain Plaud authorization URL");
   return url;
 }
 

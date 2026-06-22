@@ -6,6 +6,16 @@ describe("parseToolJson", () => {
     const result = { content: [{ type: "text", text: '{"files":' }, { type: "text", text: "[]}" }, { type: "image" }] };
     expect(parseToolJson(result)).toEqual({ files: [] });
   });
+
+  it("throws with raw MCP error text when result.isError is true", () => {
+    const result = { isError: true, content: [{ type: "text", text: "MCP error: invalid arguments" }] };
+    expect(() => parseToolJson(result)).toThrow(/MCP error: invalid arguments/);
+  });
+
+  it("throws with raw text when content is not valid JSON", () => {
+    const result = { content: [{ type: "text", text: "oops not json" }] };
+    expect(() => parseToolJson(result)).toThrow(/oops not json/);
+  });
 });
 
 describe("mapFile", () => {

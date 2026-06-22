@@ -16,7 +16,14 @@ export function parseToolJson<T>(result: any): T {
     .filter((b: any) => b?.type === "text")
     .map((b: any) => b.text)
     .join("");
-  return JSON.parse(text) as T;
+  if (result?.isError) {
+    throw new Error(`Plaud MCP tool error: ${text.slice(0, 800)}`);
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`Plaud MCP returned non-JSON: ${text.slice(0, 800)}`);
+  }
 }
 
 // Field names confirmed against the MCP docs (id/name/start_at/duration ms/presigned_url);

@@ -8,7 +8,8 @@ export async function GET(request: NextRequest) {
   try {
     const url = await beginAuth();
     return NextResponse.redirect(url);
-  } catch {
+  } catch (e) {
+    console.error("[plaud oauth]", e);
     return NextResponse.redirect(new URL("/settings?plaud=error", request.url));
   }
 }

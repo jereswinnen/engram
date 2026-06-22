@@ -10,7 +10,8 @@ export async function GET(request: NextRequest) {
   try {
     await finishAuth(code);
     return NextResponse.redirect(new URL("/settings?plaud=connected", request.url));
-  } catch {
+  } catch (e) {
+    console.error("[plaud oauth]", e);
     return NextResponse.redirect(new URL("/settings?plaud=error", request.url));
   }
 }

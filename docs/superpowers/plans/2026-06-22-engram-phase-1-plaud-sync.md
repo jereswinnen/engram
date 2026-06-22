@@ -1,3 +1,5 @@
+> ⚠️ SUPERSEDED — the reverse-engineered approach was abandoned (the Plaud MCP is free). See the official-MCP spec/plan dated 2026-06-22. Kept for history only.
+
 # Engram Phase 1 — Plaud Sync Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

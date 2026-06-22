@@ -46,18 +46,24 @@ export async function disconnect(): Promise<void> {
 
 export async function listFiles(
   client: Client,
-  args: { query?: string; date_from?: string; date_to?: string; page?: number; page_size?: number } = {},
+  args: { query?: string; date_from?: string; date_to?: string; page_size?: number } = {},
 ): Promise<PlaudFile[]> {
-  const res = await client.callTool({ name: "list_files", arguments: args });
-  const parsed = parseToolJson<any>(res);
-  const items = Array.isArray(parsed) ? parsed : (parsed.files ?? parsed.data ?? parsed.list ?? parsed.items ?? []);
+  const page_size = args.page_size ?? 50;
   const out: PlaudFile[] = [];
+  let rawCount = 0;
   let firstError: unknown;
-  for (const raw of items) {
-    try { out.push(mapFile(raw)); }
-    catch (e) { if (firstError === undefined) firstError = e; }
+  for (let page = 1; page <= 1000; page++) { // 1000-page safety cap
+    const res = await client.callTool({ name: "list_files", arguments: { ...args, page, page_size } });
+    const parsed = parseToolJson<any>(res);
+    const items = Array.isArray(parsed) ? parsed : (parsed.files ?? parsed.data ?? parsed.list ?? parsed.items ?? []);
+    rawCount += items.length;
+    for (const raw of items) {
+      try { out.push(mapFile(raw)); }
+      catch (e) { if (firstError === undefined) firstError = e; console.warn(`listFiles: skipping unmappable record: ${(e as Error).message}`); }
+    }
+    if (items.length < page_size) break; // last page
   }
-  if (items.length > 0 && out.length === 0) {
+  if (rawCount > 0 && out.length === 0) {
     throw firstError instanceof Error ? firstError : new Error("listFiles: no files could be mapped");
   }
   return out;

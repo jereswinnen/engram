@@ -15,13 +15,26 @@ describe("listFiles", () => {
   it("calls list_files and maps results", async () => {
     const client = { callTool: vi.fn(async () => toolResult({ files: [{ id: "f1", start_at: "2026-06-01T10:00:00Z" }] })) } as any;
     const files = await listFiles(client, { date_from: "2026-05-01T00:00:00Z" });
-    expect(client.callTool).toHaveBeenCalledWith({ name: "list_files", arguments: { date_from: "2026-05-01T00:00:00Z" } });
+    expect(client.callTool).toHaveBeenCalledWith({ name: "list_files", arguments: { date_from: "2026-05-01T00:00:00Z", page: 1, page_size: 50 } });
     expect(files).toHaveLength(1);
     expect(files[0].fileId).toBe("f1");
   });
   it("handles array / data / list response shapes", async () => {
     const client = { callTool: vi.fn(async () => toolResult({ data: [{ id: "a", start_at: "2026-06-01T10:00:00Z" }] })) } as any;
     expect((await listFiles(client)).map((f) => f.fileId)).toEqual(["a"]);
+  });
+  it("paginates across multiple pages and stops on a short page", async () => {
+    const fullPage = Array.from({ length: 50 }, (_, i) => ({ id: `f${i}`, start_at: "2026-06-01T10:00:00Z" }));
+    const shortPage = Array.from({ length: 10 }, (_, i) => ({ id: `g${i}`, start_at: "2026-06-01T10:00:00Z" }));
+    const client = {
+      callTool: vi.fn(async (req: any) => {
+        const page = req.arguments?.page;
+        return toolResult({ files: page === 1 ? fullPage : shortPage });
+      }),
+    } as any;
+    const files = await listFiles(client);
+    expect(files).toHaveLength(60);
+    expect(client.callTool).toHaveBeenCalledTimes(2);
   });
 });
 

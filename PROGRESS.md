@@ -29,7 +29,7 @@
 ## Remaining Roadmap (post Phase 0)
 
 > Phase 0 code is complete and merged to `main`. Phase 1 is now complete (env vars + cron
-> wiring + docs). See `DEPLOY.md` Section "Phase 1 — Plaud sync" for the full user guide.
+> wiring + docs). See `DEPLOY.md` Section "Phase 1 — Plaud MCP sync" for the full user guide.
 
 ### Phase 1 — Plaud MCP sync + real device (makes capture automatic)
 

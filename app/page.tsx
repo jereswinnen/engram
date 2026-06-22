@@ -21,13 +21,13 @@ export default async function HomePage() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold">Opnames</h1>
+        <h1 className="text-xl font-semibold">Recordings</h1>
         <Button asChild>
-          <Link href="/upload">Uploaden</Link>
+          <Link href="/upload">Upload</Link>
         </Button>
       </div>
       {recs.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Geen opnames gevonden.</p>
+        <p className="text-sm text-muted-foreground">No recordings yet.</p>
       ) : (
         <div className="flex flex-col gap-3">
           {recs.map((rec) => (
@@ -36,7 +36,7 @@ export default async function HomePage() {
                 <CardHeader>
                   <CardTitle>{rec.title}</CardTitle>
                   <CardDescription>
-                    {new Date(rec.createdAt).toLocaleDateString("nl-BE", {
+                    {new Date(rec.createdAt).toLocaleDateString("en-GB", {
                       day: "2-digit",
                       month: "long",
                       year: "numeric",

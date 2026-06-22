@@ -20,7 +20,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="nl"
+      lang="en"
       suppressHydrationWarning
       className={cn("antialiased", fontMono.variable, "font-sans", dmSans.variable)}
     >
@@ -34,13 +34,13 @@ export default function RootLayout({
               href="/upload"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              Uploaden
+              Upload
             </Link>
             <Link
               href="/settings"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              Instellingen
+              Settings
             </Link>
             <div className="ml-auto">
               <LogoutButton />

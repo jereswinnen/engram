@@ -19,10 +19,10 @@ export default function RetryButton({ recordingId }: { recordingId: string }) {
       if (res.ok) {
         router.refresh();
       } else {
-        setError("Herproberen mislukt. Probeer het later opnieuw.");
+        setError("Retry failed. Please try again later.");
       }
     } catch {
-      setError("Herproberen mislukt. Probeer het later opnieuw.");
+      setError("Retry failed. Please try again later.");
     } finally {
       setLoading(false);
     }
@@ -31,7 +31,7 @@ export default function RetryButton({ recordingId }: { recordingId: string }) {
   return (
     <div>
       <Button variant="outline" onClick={handleRetry} disabled={loading}>
-        {loading ? "Bezig…" : "Opnieuw proberen"}
+        {loading ? "Working…" : "Retry"}
       </Button>
       {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
     </div>

@@ -153,4 +153,11 @@ export const syncState = pgTable("sync_state", {
   id: uuid("id").primaryKey().defaultRandom(),
   lastCursor: text("last_cursor"),
   lastSyncedAt: timestamp("last_synced_at"),
+  lastResult: jsonb("last_result").$type<{
+    ranAt: string;
+    newCount: number;
+    skippedCount: number;
+    failedCount: number;
+    error?: string;
+  }>(),
 });

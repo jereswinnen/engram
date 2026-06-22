@@ -70,7 +70,7 @@ export async function listFiles(
 }
 
 export async function getFile(client: Client, id: string): Promise<PlaudFileDetail> {
-  const res = await client.callTool({ name: "get_file", arguments: { id } });
+  const res = await client.callTool({ name: "get_file", arguments: { file_id: id } });
   const parsed = parseToolJson<any>(res);
   return mapFileDetail(parsed.data ?? parsed.file ?? parsed);
 }

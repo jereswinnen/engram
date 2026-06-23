@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, timestamp, jsonb, boolean, index, customType } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, timestamp, jsonb, boolean, index, customType, unique } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
 const tsvector = customType<{ data: string }>({
@@ -196,3 +196,17 @@ export const backups = pgTable("backups", {
   error: text("error"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+export const speakers = pgTable("speakers", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull().unique(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const recordingSpeakers = pgTable("recording_speakers", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  recordingId: uuid("recording_id").notNull().references(() => recordings.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  speakerId: uuid("speaker_id").notNull().references(() => speakers.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [unique("recording_speakers_recording_label").on(t.recordingId, t.label)]);

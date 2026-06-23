@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import WaveSurfer from "wavesurfer.js";
 import { activeSegmentIndex } from "@/lib/transcript/active-segment";
+import { firstMatchingSegmentIndex } from "@/lib/search/match";
 
 type Segment = { start: number; end: number; text: string; speaker?: string | null };
 
@@ -12,7 +13,7 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export function TranscriptPlayer({ audioSrc, segments }: { audioSrc: string; segments: Segment[] }) {
+export function TranscriptPlayer({ audioSrc, segments, highlightQuery }: { audioSrc: string; segments: Segment[]; highlightQuery?: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WaveSurfer | null>(null);
   const segmentRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -54,7 +55,16 @@ export function TranscriptPlayer({ audioSrc, segments }: { audioSrc: string; seg
       setActive(activeSegmentIndex(segmentsRef.current, t));
     };
     ws.on("timeupdate", onTime);
-    ws.on("ready", () => setDuration(ws.getDuration()));
+    ws.on("ready", () => {
+      setDuration(ws.getDuration());
+      if (highlightQuery) {
+        const idx = firstMatchingSegmentIndex(segmentsRef.current, highlightQuery);
+        if (idx >= 0) {
+          setActive(idx);
+          ws.setTime(segmentsRef.current[idx].start);
+        }
+      }
+    });
     ws.on("play", () => setPlaying(true));
     ws.on("pause", () => setPlaying(false));
     ws.on("error", () => setError(true));

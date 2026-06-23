@@ -77,8 +77,10 @@ network. Full design + plan in
 - [x] **Waveform player (Wavesurfer.js) + click-to-seek** (COMPLETE)
       Spec: [Phase 1+ Waveform Player Design](docs/superpowers/specs/2026-06-23-engram-waveform-player-design.md)
       Includes Wavesurfer.js rounded-bar waveform with two-way transcript sync (click segment to seek, active segment highlights + auto-scroll during playback).
-- [ ] Full-text search across all transcripts
-- [ ] Export: JSON / TXT / SRT-VTT subtitles / one-click full backup
+- [x] **Full-text search across all transcripts** (COMPLETE)
+      Spec: [Phase 1+ Full-text Search Design](docs/superpowers/specs/2026-06-23-engram-fulltext-search-design.md)
+      Postgres FTS with `websearch_to_tsquery`, GIN index, ranked results, highlighted snippets, and deep-linking to matching segments.
+- [ ] **Export** (LAST REMAINING Phase 1+ slice): MD / JSON / Notion / one-click full backup
 - [ ] Browser notifications when a recording finishes (no email — per project decision)
 
 ### Phase 2 — closer to "Plaud Intelligence"

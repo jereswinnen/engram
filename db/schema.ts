@@ -1,5 +1,11 @@
-import { pgTable, uuid, text, integer, timestamp, jsonb, boolean, index } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { pgTable, uuid, text, integer, timestamp, jsonb, boolean, index, customType } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
+
+const tsvector = customType<{ data: string }>({
+  dataType() {
+    return "tsvector";
+  },
+});
 
 // ---------------------------------------------------------------------------
 // Better Auth tables
@@ -107,15 +113,24 @@ export const recordings = pgTable("recordings", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const transcriptions = pgTable("transcriptions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  recordingId: uuid("recording_id").notNull().references(() => recordings.id, { onDelete: "cascade" }),
-  fullText: text("full_text").notNull(),
-  rawText: text("raw_text"),
-  language: text("language"),
-  segments: jsonb("segments").notNull().$type<{ start: number; end: number; text: string; speaker?: string }[]>(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const transcriptions = pgTable(
+  "transcriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    recordingId: uuid("recording_id").notNull().references(() => recordings.id, { onDelete: "cascade" }),
+    fullText: text("full_text").notNull(),
+    rawText: text("raw_text"),
+    language: text("language"),
+    segments: jsonb("segments").notNull().$type<{ start: number; end: number; text: string; speaker?: string }[]>(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    searchVector: tsvector("search_vector").generatedAlwaysAs(
+      sql`to_tsvector('simple', coalesce(full_text, ''))`,
+    ),
+  },
+  (t) => [
+    index("idx_transcriptions_search").using("gin", t.searchVector),
+  ],
+);
 
 export const aiEnhancements = pgTable("ai_enhancements", {
   id: uuid("id").primaryKey().defaultRandom(),

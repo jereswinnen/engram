@@ -15,12 +15,15 @@ import { TranscriptPlayer } from "./transcript-player";
 
 export default async function RecordingPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ q?: string }>;
 }) {
   await requireSession();
 
   const { id } = await params;
+  const { q } = await searchParams;
 
   const [recording, transcription, enhancement] = await Promise.all([
     db.query.recordings.findFirst({ where: eq(recordings.id, id) }),
@@ -54,6 +57,7 @@ export default async function RecordingPage({
       <TranscriptPlayer
         audioSrc={`/api/recordings/${id}/audio`}
         segments={transcription?.segments ?? []}
+        highlightQuery={q}
       />
 
       {/* Error state */}

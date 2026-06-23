@@ -14,6 +14,7 @@ vi.mock("@/lib/storage", () => ({
 vi.mock("@/lib/export/markdown", () => ({ recordingToMarkdown: () => "MD" }));
 vi.mock("@/lib/export/json", () => ({ recordingToExport: () => ({ id: "r" }) }));
 vi.mock("@/lib/export/filename", () => ({ exportFilename: () => "x.mp3" }));
+vi.mock("@/lib/speakers/store", () => ({ getRecordingSpeakerMap: async () => ({}) }));
 vi.mock("@/db", () => ({
   db: {
     query: {

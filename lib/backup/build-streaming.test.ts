@@ -49,6 +49,7 @@ vi.mock("@/lib/export/json", () => ({
   recordingToExport: () => ({ id: "r1", title: "Test Recording", source: "plaud" }),
 }));
 vi.mock("@/lib/export/filename", () => ({ exportFilename: () => "audio.mp3" }));
+vi.mock("@/lib/speakers/store", () => ({ getRecordingSpeakerMap: async () => ({}) }));
 
 vi.mock("@/db", () => ({
   db: {

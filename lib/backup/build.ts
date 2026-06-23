@@ -7,6 +7,7 @@ import { getStorage } from "@/lib/storage";
 import { recordingToMarkdown } from "@/lib/export/markdown";
 import { recordingToExport } from "@/lib/export/json";
 import { exportFilename } from "@/lib/export/filename";
+import { getRecordingSpeakerMap } from "@/lib/speakers/store";
 import { markReady, markError } from "./store";
 
 export async function buildBackup(id: string): Promise<void> {
@@ -37,11 +38,14 @@ export async function buildBackup(id: string): Promise<void> {
     const manifest = { createdAt: new Date().toISOString(), recordings: [] as any[], errors: [] as any[] };
 
     for (const rec of recs) {
-      const tr = await db.query.transcriptions.findFirst({ where: eq(transcriptions.recordingId, rec.id), orderBy: [desc(transcriptions.createdAt)] });
-      const enh = await db.query.aiEnhancements.findFirst({ where: eq(aiEnhancements.recordingId, rec.id), orderBy: [desc(aiEnhancements.createdAt)] });
+      const [tr, enh, speakerMap] = await Promise.all([
+        db.query.transcriptions.findFirst({ where: eq(transcriptions.recordingId, rec.id), orderBy: [desc(transcriptions.createdAt)] }),
+        db.query.aiEnhancements.findFirst({ where: eq(aiEnhancements.recordingId, rec.id), orderBy: [desc(aiEnhancements.createdAt)] }),
+        getRecordingSpeakerMap(rec.id),
+      ]);
       const folder = `recordings/${rec.id}`;
-      archive.append(recordingToMarkdown(rec, tr ?? null, enh ?? null), { name: `${folder}/transcript.md` });
-      archive.append(JSON.stringify(recordingToExport(rec, tr ?? null, enh ?? null), null, 2), { name: `${folder}/data.json` });
+      archive.append(recordingToMarkdown(rec, tr ?? null, enh ?? null, speakerMap), { name: `${folder}/transcript.md` });
+      archive.append(JSON.stringify(recordingToExport(rec, tr ?? null, enh ?? null, speakerMap), null, 2), { name: `${folder}/data.json` });
       try {
         const url = await storage.presignedGetUrl(rec.storageKey, 3600);
         const res = await fetch(url);

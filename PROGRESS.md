@@ -81,11 +81,28 @@ network. Full design + plan in
 
 ### Phase 2 — closer to "Plaud Intelligence"
 
-- [ ] Multi-view / role-specific summaries (schema already allows multiple `ai_enhancements` rows per recording)
-- [ ] Template library (`templates` table = name + prompt + optional output schema)
-- [ ] Mind maps (prompt → hierarchical JSON → markmap/react-flow)
-- [ ] Ask-Engram (RAG): chunk → embed → `pgvector` → retrieve → answer with citations to word timestamps
-- [ ] Glossary/jargon: Scribe keyterm prompting or an LLM post-edit pass
+**Status:** STARTED. Glossary slice COMPLETE.
+
+#### Phase 2.1 — Glossary (COMPLETE)
+
+Glossary feature enables domain-specific terminology management with Scribe keyterm biasing,
+alias auto-correction, and summary injection. Full spec and implementation plan:
+- [Phase 2 Glossary Design Spec](docs/superpowers/specs/2026-06-23-engram-phase-2-glossary-design.md)
+- [Phase 2 Glossary Implementation Plan](docs/superpowers/plans/2026-06-23-engram-phase-2-glossary.md)
+
+Implementation:
+- [x] **Glossary schema** — `glossary` table (`id`, `term`, `aliases`, `createdAt`, `updatedAt`)
+- [x] **Scribe keyterms** — sanitize glossary to Scribe limits; inject into transcription options
+- [x] **Deterministic alias correction** — regex-based pass that rewrites aliases → canonical in transcript
+- [x] **Summary injection** — glossary block included in LLM prompt for enhanced summaries
+- [x] **Settings UI** — add/edit/delete terms with comma-separated aliases
+- [x] **Cost note + docs** — DEPLOY.md updated with glossary section; cost impact documented
+
+#### Phase 2 — Remaining slices (PENDING)
+
+- [ ] **Speaker naming + cross-recording speaker ID** — identify speakers by name across multiple recordings
+- [ ] **Multi-view summaries + templates** — multiple views per recording; template library for custom summaries
+- [ ] **Ask-Engram (RAG)** — chunk → embed → pgvector → retrieve → answer with word-timestamp citations
 - [ ] Native iOS client (SwiftUI/SwiftData) against Engram's REST API
 
 ### Known minor follow-ups (non-blocking, from code review)

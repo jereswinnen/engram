@@ -245,6 +245,37 @@ a real recording:
 
 ---
 
+## Phase 2 — Glossary
+
+The Glossary feature allows you to define domain-specific terminology and aliases
+that Engram uses to improve transcription accuracy and consistency. This section covers setup and usage.
+
+### 1. Manage glossary terms in Settings
+
+1. Log in to Engram.
+2. Click **Settings** in the header.
+3. Under **Glossary**, add, edit, or delete terms:
+   - **Term** — the canonical form (e.g., "TypeScript").
+   - **Aliases** (optional) — comma-separated alternate spellings or pronunciations
+     (e.g., "Type Script, typescript"). Aliases are automatically corrected to the canonical form in transcripts.
+
+### 2. Transcription cost note
+
+When your glossary is non-empty, Engram sends the glossary terms to ElevenLabs Scribe
+as `keyterms`. This biases transcription toward your domain terminology and improves
+accuracy. **Important:** using `keyterms` adds approximately **20% to Scribe transcription cost**.
+If cost is a concern, keep your glossary empty (no-op, zero overhead) or use it selectively.
+
+### 3. Behavior
+
+- **New recordings only** — glossary applies to recordings uploaded after terms are added.
+  Existing transcripts are not reprocessed.
+- **Alias correction** — all aliases are deterministically corrected to their canonical form
+  in the final transcript.
+- **Summary injection** — glossary terms are included in the prompt that generates the recording summary.
+
+---
+
 ## Known footguns
 
 - **Local `next build` / `pnpm dev` without env vars set will throw at import time.**

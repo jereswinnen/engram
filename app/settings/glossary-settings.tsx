@@ -26,11 +26,12 @@ export function GlossarySettings({ entries }: { entries: Entry[] }) {
   }
 
   async function remove(id: string) {
-    setBusy(true);
+    setBusy(true); setError(null);
     try {
       const res = await fetch(`/api/glossary/${id}`, { method: "DELETE" });
-      if (res.ok) router.refresh();
-    } finally { setBusy(false); }
+      if (!res.ok) throw new Error((await res.json()).error ?? "Could not delete term");
+      router.refresh();
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
 
   return (

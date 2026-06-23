@@ -12,6 +12,7 @@ import {
 import RetryButton from "./retry-button";
 import { requireSession } from "@/lib/auth-guard";
 import { TranscriptPlayer } from "./transcript-player";
+import { ExportButtons } from "./export-buttons";
 
 export default async function RecordingPage({
   params,
@@ -52,6 +53,8 @@ export default async function RecordingPage({
       </Link>
 
       <h1 className="text-xl font-semibold">{recording.title}</h1>
+
+      <ExportButtons id={id} />
 
       {/* Waveform player + transcript */}
       <TranscriptPlayer

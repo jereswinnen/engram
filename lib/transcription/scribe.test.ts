@@ -1,5 +1,27 @@
-import { describe, it, expect } from "vitest";
-import { wordsToSegments } from "./scribe";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { transcribeWithScribe, wordsToSegments } from "./scribe";
+
+function okResponse() {
+  return new Response(JSON.stringify({ text: "hoi", language_code: "nld", words: [] }), { status: 200 });
+}
+
+describe("transcribeWithScribe keyterms", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("includes keyterms in the request when provided", async () => {
+    const fetchMock = vi.spyOn(global, "fetch").mockResolvedValue(okResponse());
+    await transcribeWithScribe({ cloudStorageUrl: "https://x" }, { apiKey: "k", keyterms: ["Riffado", "Engram"] });
+    const body = (fetchMock.mock.calls[0][1] as RequestInit).body as FormData;
+    expect(body.get("keyterms")).toBe(JSON.stringify(["Riffado", "Engram"]));
+  });
+
+  it("omits keyterms when none provided", async () => {
+    const fetchMock = vi.spyOn(global, "fetch").mockResolvedValue(okResponse());
+    await transcribeWithScribe({ cloudStorageUrl: "https://x" }, { apiKey: "k" });
+    const body = (fetchMock.mock.calls[0][1] as RequestInit).body as FormData;
+    expect(body.get("keyterms")).toBeNull();
+  });
+});
 
 describe("wordsToSegments", () => {
   it("groups consecutive words by speaker", () => {

@@ -16,13 +16,19 @@ export function TranscriptPlayer({ audioSrc, segments }: { audioSrc: string; seg
   const containerRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WaveSurfer | null>(null);
   const segmentRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const segmentsRef = useRef(segments);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [active, setActive] = useState(-1);
   const [error, setError] = useState(false);
 
-  // Init Wavesurfer once. `audioSrc` is stable for the page's lifetime; `segments`
-  // is a server-serialized prop with stable identity, so this effect runs once.
+  // Sync segmentsRef with the latest segments prop.
+  useEffect(() => {
+    segmentsRef.current = segments;
+  });
+
+  // Init Wavesurfer once. `audioSrc` is stable for the page's lifetime.
+  // Decouple from segments to avoid re-initialization on prop identity change.
   useEffect(() => {
     if (!containerRef.current) return;
     const media = document.createElement("audio");
@@ -44,7 +50,7 @@ export function TranscriptPlayer({ audioSrc, segments }: { audioSrc: string; seg
 
     const onTime = (t: number) => {
       setCurrentTime(t);
-      setActive(activeSegmentIndex(segments, t));
+      setActive(activeSegmentIndex(segmentsRef.current, t));
     };
     ws.on("timeupdate", onTime);
     ws.on("play", () => setPlaying(true));
@@ -55,7 +61,7 @@ export function TranscriptPlayer({ audioSrc, segments }: { audioSrc: string; seg
       ws.destroy();
       wsRef.current = null;
     };
-  }, [audioSrc, segments]);
+  }, [audioSrc]);
 
   // Auto-scroll the active segment into view as it changes.
   useEffect(() => {
@@ -70,6 +76,7 @@ export function TranscriptPlayer({ audioSrc, segments }: { audioSrc: string; seg
         <button
           type="button"
           onClick={() => wsRef.current?.playPause()}
+          aria-label={playing ? "Pause" : "Play"}
           className="rounded-md border px-3 py-1 text-sm hover:bg-muted"
         >
           {playing ? "Pause" : "Play"}

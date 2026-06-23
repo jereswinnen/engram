@@ -48,6 +48,10 @@ export function TranscriptPlayer({
   // editingLabel: the diarized label currently being renamed (e.g. "SPEAKER_00")
   const [editingLabel, setEditingLabel] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  // cancelledRef: true when Escape was pressed — tells onBlur to skip the submit
+  const cancelledRef = useRef(false);
+  // submittingRef: true while submitRename is running — prevents double-PUT (Enter then blur)
+  const submittingRef = useRef(false);
 
   // Sync segmentsRef with the latest segments prop.
   useEffect(() => {
@@ -108,23 +112,32 @@ export function TranscriptPlayer({
   }, [active]);
 
   async function submitRename(label: string, name: string) {
+    // Fix 2: guard against double-fire (Enter → onSubmit → setEditingLabel(null) → onBlur)
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setEditingLabel(null);
-    const trimmed = name.trim();
-    await fetch(`/api/recordings/${recordingId}/speakers`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ label, name: trimmed }),
-    });
-    if (trimmed) {
-      setNameMap((m) => ({ ...m, [label]: trimmed }));
-    } else {
-      setNameMap((m) => {
-        const next = { ...m };
-        delete next[label];
-        return next;
+    try {
+      const trimmed = name.trim();
+      const res = await fetch(`/api/recordings/${recordingId}/speakers`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label, name: trimmed }),
       });
+      // Fix 3: only apply optimistic update when the server accepted the change
+      if (!res.ok) return;
+      if (trimmed) {
+        setNameMap((m) => ({ ...m, [label]: trimmed }));
+      } else {
+        setNameMap((m) => {
+          const next = { ...m };
+          delete next[label];
+          return next;
+        });
+      }
+      router.refresh();
+    } finally {
+      submittingRef.current = false;
     }
-    router.refresh();
   }
 
   return (
@@ -204,9 +217,19 @@ export function TranscriptPlayer({
                         list="speaker-directory"
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
-                        onBlur={() => void submitRename(label, editValue)}
+                        onBlur={() => {
+                          // Fix 1: Escape sets cancelledRef so the blur triggered by
+                          // unmounting the input doesn't also fire a submit
+                          if (cancelledRef.current) { cancelledRef.current = false; return; }
+                          void submitRename(label, editValue);
+                        }}
                         onKeyDown={(e) => {
-                          if (e.key === "Escape") setEditingLabel(null);
+                          if (e.key === "Escape") {
+                            // Fix 1: mark as cancelled before setEditingLabel so the
+                            // ensuing onBlur (from unmount) knows not to submit
+                            cancelledRef.current = true;
+                            setEditingLabel(null);
+                          }
                         }}
                         placeholder={displayName}
                         className="rounded border px-1 text-xs font-medium w-28"

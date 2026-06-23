@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import WaveSurfer from "wavesurfer.js";
 import { activeSegmentIndex } from "@/lib/transcript/active-segment";
 import { firstMatchingSegmentIndex } from "@/lib/search/match";
+import { nameForLabel } from "@/lib/transcript/speaker-names";
 
 type Segment = { start: number; end: number; text: string; speaker?: string | null };
 
@@ -15,7 +17,24 @@ function formatTime(seconds: number): string {
 
 type Chapter = { title: string; gist: string; startSeconds?: number };
 
-export function TranscriptPlayer({ audioSrc, segments, highlightQuery, chapters }: { audioSrc: string; segments: Segment[]; highlightQuery?: string; chapters?: Chapter[] }) {
+export function TranscriptPlayer({
+  audioSrc,
+  segments,
+  highlightQuery,
+  chapters,
+  speakerMap = {},
+  directory = [],
+  recordingId = "",
+}: {
+  audioSrc: string;
+  segments: Segment[];
+  highlightQuery?: string;
+  chapters?: Chapter[];
+  speakerMap?: Record<string, string>;
+  directory?: string[];
+  recordingId?: string;
+}) {
+  const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WaveSurfer | null>(null);
   const segmentRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -25,6 +44,10 @@ export function TranscriptPlayer({ audioSrc, segments, highlightQuery, chapters 
   const [duration, setDuration] = useState(0);
   const [active, setActive] = useState(-1);
   const [error, setError] = useState(false);
+  const [nameMap, setNameMap] = useState<Record<string, string>>(speakerMap);
+  // editingLabel: the diarized label currently being renamed (e.g. "SPEAKER_00")
+  const [editingLabel, setEditingLabel] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
 
   // Sync segmentsRef with the latest segments prop.
   useEffect(() => {
@@ -84,6 +107,26 @@ export function TranscriptPlayer({ audioSrc, segments, highlightQuery, chapters 
     }
   }, [active]);
 
+  async function submitRename(label: string, name: string) {
+    setEditingLabel(null);
+    const trimmed = name.trim();
+    await fetch(`/api/recordings/${recordingId}/speakers`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label, name: trimmed }),
+    });
+    if (trimmed) {
+      setNameMap((m) => ({ ...m, [label]: trimmed }));
+    } else {
+      setNameMap((m) => {
+        const next = { ...m };
+        delete next[label];
+        return next;
+      });
+    }
+    router.refresh();
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
@@ -119,24 +162,78 @@ export function TranscriptPlayer({ audioSrc, segments, highlightQuery, chapters 
       )}
 
       {segments.length > 0 && (
-        <div className="mt-2 flex max-h-96 flex-col gap-1 overflow-y-auto text-sm font-mono">
-          {segments.map((seg, i) => (
-            <button
-              type="button"
-              key={i}
-              ref={(el) => {
-                segmentRefs.current[i] = el;
-              }}
-              onClick={() => wsRef.current?.setTime(seg.start)}
-              className={`cursor-pointer rounded px-1 text-left ${i === active ? "bg-muted" : ""}`}
-            >
-              <span className="text-muted-foreground text-xs">{formatTime(seg.start)}</span>{" "}
-              <span className="font-medium">Speaker {seg.speaker ?? "?"}</span>
-              {": "}
-              {seg.text}
-            </button>
-          ))}
-        </div>
+        <>
+          {directory.length > 0 && (
+            <datalist id="speaker-directory">
+              {directory.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+          )}
+          <div className="mt-2 flex max-h-96 flex-col gap-1 overflow-y-auto text-sm font-mono">
+            {segments.map((seg, i) => {
+              const label = seg.speaker ?? "";
+              const displayName = nameForLabel(label || "Speaker ?", nameMap);
+              const isEditing = editingLabel === label && label !== "";
+              return (
+                <div
+                  key={i}
+                  className={`flex items-baseline gap-1 rounded px-1 ${i === active ? "bg-muted" : ""}`}
+                >
+                  <button
+                    type="button"
+                    ref={(el) => {
+                      segmentRefs.current[i] = el;
+                    }}
+                    onClick={() => wsRef.current?.setTime(seg.start)}
+                    className="cursor-pointer text-left shrink-0"
+                  >
+                    <span className="text-muted-foreground text-xs">{formatTime(seg.start)}</span>
+                  </button>
+                  {" "}
+                  {isEditing ? (
+                    <form
+                      className="inline-flex items-center gap-1"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void submitRename(label, editValue);
+                      }}
+                    >
+                      <input
+                        autoFocus
+                        list="speaker-directory"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onBlur={() => void submitRename(label, editValue)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") setEditingLabel(null);
+                        }}
+                        placeholder={displayName}
+                        className="rounded border px-1 text-xs font-medium w-28"
+                      />
+                    </form>
+                  ) : (
+                    <button
+                      type="button"
+                      title="Click to rename speaker"
+                      onClick={() => {
+                        if (label) {
+                          setEditingLabel(label);
+                          setEditValue(nameMap[label] ?? "");
+                        }
+                      }}
+                      className="font-medium hover:underline decoration-dotted cursor-pointer shrink-0"
+                    >
+                      {displayName}
+                    </button>
+                  )}
+                  {": "}
+                  <span className="break-words">{seg.text}</span>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

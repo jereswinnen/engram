@@ -13,6 +13,7 @@ import RetryButton from "./retry-button";
 import { requireSession } from "@/lib/auth-guard";
 import { TranscriptPlayer } from "./transcript-player";
 import { ExportButtons } from "./export-buttons";
+import { getRecordingSpeakerMap, listSpeakers } from "@/lib/speakers/store";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -35,7 +36,7 @@ export default async function RecordingPage({
   const { id } = await params;
   const { q } = await searchParams;
 
-  const [recording, transcription, enhancement] = await Promise.all([
+  const [recording, transcription, enhancement, speakerMap, speakerDirectory] = await Promise.all([
     db.query.recordings.findFirst({ where: eq(recordings.id, id) }),
     db.query.transcriptions.findFirst({
       where: eq(transcriptions.recordingId, id),
@@ -45,6 +46,8 @@ export default async function RecordingPage({
       where: eq(aiEnhancements.recordingId, id),
       orderBy: [desc(aiEnhancements.createdAt)],
     }),
+    getRecordingSpeakerMap(id),
+    listSpeakers(),
   ]);
 
   if (!recording) notFound();
@@ -71,6 +74,9 @@ export default async function RecordingPage({
         segments={transcription?.segments ?? []}
         highlightQuery={q}
         chapters={enhancement?.chapters ?? []}
+        speakerMap={speakerMap}
+        directory={speakerDirectory.map((s) => s.name)}
+        recordingId={id}
       />
 
       {/* Error state */}

@@ -32,6 +32,7 @@ vi.mock("@/lib/storage", () => ({
   getStorage: () => ({
     presignedGetUrl: vi.fn(async (k: string) => `https://signed/${k}`),
     putStream: vi.fn(async (_key: string, body: AsyncIterable<Buffer>) => {
+      await new Promise((resolve) => setImmediate(resolve)); // mirror lib-storage Upload: attach the for-await a tick later
       let received = 0;
       for await (const chunk of body) {
         received += (chunk as Buffer).length;

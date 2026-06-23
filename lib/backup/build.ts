@@ -57,7 +57,7 @@ export async function buildBackup(id: string): Promise<void> {
     archive.append(JSON.stringify(manifest, null, 2), { name: "manifest.json" });
     // Do NOT await finalize() before upload — with the Transform consumed solely by the
     // upload, awaiting finalize first could deadlock on backpressure.
-    archive.finalize();
+    archive.finalize().catch(() => {}); // errors already surfaced via the "error" event + upload rejection
     await upload;
     await markReady(id, key, size);
   } catch (e) {

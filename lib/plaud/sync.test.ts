@@ -47,19 +47,23 @@ vi.mock("@/db", () => ({
     delete: () => ({ where: async () => { calls.deleted.push(true); } }),
     query: {
       recordings: { findMany: async () => calls.existing ?? [], findFirst: async () => calls.findFirstResult ?? { status: "transcribed" } },
-      syncState: { findFirst: async () => calls.syncRow ?? { id: "s1", lastSyncedAt: null, lastResult: null } },
+      syncState: { findFirst: async () => calls.syncRow ?? { id: "s1", lastSyncedAt: null, lastResult: null, runningSince: null } },
     },
   },
 }));
 
 beforeEach(() => {
   calls.stored = []; calls.inserted = []; calls.transcribed = []; calls.enhanced = [];
-  calls.syncStateSet = []; calls.existing = []; calls.syncRow = { id: "s1", lastSyncedAt: null, lastResult: null };
+  calls.syncStateSet = []; calls.existing = []; calls.syncRow = { id: "s1", lastSyncedAt: null, lastResult: null, runningSince: null };
   calls.findFirstResult = undefined; calls.failUrl = undefined; calls.deleted = []; calls.failPut = undefined;
   calls.connected = true; calls.connectThrows = false; calls.files = [];
 });
 
 describe("syncPlaud", () => {
+  // The mock db.update() pushes every set() into calls.syncStateSet (recording + syncState writes).
+  // Find the last syncState write carrying a given key.
+  const lastWriteWith = (key: string) => calls.syncStateSet.filter((s: any) => key in s).at(-1);
+
   it("ingests new recordings through the pipeline and advances the checkpoint", async () => {
     calls.files = [
       { fileId: "f1", name: "One", startAtMs: 1000, trashed: false },
@@ -72,9 +76,8 @@ describe("syncPlaud", () => {
     expect(calls.transcribed).toHaveLength(2);
     expect(calls.enhanced).toHaveLength(2);
     // checkpoint advanced to max startAt (2000) and lastResult written
-    const lastSet = calls.syncStateSet.at(-1);
-    expect(new Date(lastSet.lastSyncedAt).getTime()).toBe(2000);
-    expect(lastSet.lastResult.newCount).toBe(2);
+    expect(new Date(lastWriteWith("lastSyncedAt").lastSyncedAt).getTime()).toBe(2000);
+    expect(lastWriteWith("lastResult").lastResult.newCount).toBe(2);
   });
 
   it("skips trashed + already-present and counts skips", async () => {
@@ -96,8 +99,7 @@ describe("syncPlaud", () => {
     const { syncPlaud } = await import("./sync");
     const result = await syncPlaud();
     expect(result.error).toMatch(/reconnect/i);
-    const lastSet = calls.syncStateSet.at(-1);
-    expect(lastSet.lastSyncedAt).toBeUndefined(); // only lastResult written, not checkpoint
+    expect(lastWriteWith("lastSyncedAt")).toBeUndefined(); // only lastResult written, not checkpoint
   });
 
   it("not connected → error message, checkpoint not advanced", async () => {
@@ -105,8 +107,7 @@ describe("syncPlaud", () => {
     const { syncPlaud } = await import("./sync");
     const result = await syncPlaud();
     expect(result.error).toMatch(/not connected/i);
-    const lastSet = calls.syncStateSet.at(-1);
-    expect(lastSet.lastSyncedAt).toBeUndefined(); // only lastResult written, not checkpoint
+    expect(lastWriteWith("lastSyncedAt")).toBeUndefined(); // only lastResult written, not checkpoint
   });
 
   it("never advances checkpoint past the earliest failure", async () => {
@@ -122,8 +123,7 @@ describe("syncPlaud", () => {
     const result = await syncPlaud();
     expect(result.newCount).toBe(2);
     expect(result.failedCount).toBe(1);
-    const lastSet = calls.syncStateSet.at(-1);
-    expect(new Date(lastSet.lastSyncedAt).getTime()).toBe(1999);
+    expect(new Date(lastWriteWith("lastSyncedAt").lastSyncedAt).getTime()).toBe(1999);
   });
 
   it("defers a recording whose audio isn't downloadable yet (presignedUrl null), without failing or advancing past it", async () => {
@@ -146,8 +146,7 @@ describe("syncPlaud", () => {
     expect(result.error).toBeUndefined(); // deferred is not an error
     expect(calls.deleted).toHaveLength(0); // nothing inserted for the deferred one
     // checkpoint must stay before the deferred item (2000) so it's retried → 1999
-    const lastSet = calls.syncStateSet.at(-1);
-    expect(new Date(lastSet.lastSyncedAt).getTime()).toBe(1999);
+    expect(new Date(lastWriteWith("lastSyncedAt").lastSyncedAt).getTime()).toBe(1999);
     (getFile as any).mockReset();
     (getFile as any).mockImplementation(async (_c: any, id: string) => ({ fileId: id, name: id, startAtMs: 0, trashed: false, presignedUrl: `https://signed/${id}` }));
   });
@@ -173,5 +172,32 @@ describe("syncPlaud", () => {
     expect(result.failedCount).toBe(1);
     expect(result.newCount).toBe(0);
     expect(calls.deleted).toHaveLength(1);
+  });
+
+  it("skips when a sync is already running (recent runningSince), without processing", async () => {
+    calls.syncRow = { id: "s1", lastSyncedAt: null, lastResult: null, runningSince: new Date() };
+    calls.files = [{ fileId: "f1", name: "One", startAtMs: 1000, trashed: false }];
+    const { syncPlaud } = await import("./sync");
+    const result = await syncPlaud();
+    expect(result.note).toMatch(/already running/i);
+    expect(calls.transcribed).toHaveLength(0);
+    expect(lastWriteWith("lastResult")).toBeUndefined(); // skip does not overwrite lastResult
+    expect(lastWriteWith("runningSince")).toBeUndefined(); // lock not touched on skip
+  });
+
+  it("proceeds when runningSince is stale (older than the 30-min TTL)", async () => {
+    calls.syncRow = { id: "s1", lastSyncedAt: null, lastResult: null, runningSince: new Date(Date.now() - 31 * 60 * 1000) };
+    calls.files = [{ fileId: "f1", name: "One", startAtMs: 1000, trashed: false }];
+    const { syncPlaud } = await import("./sync");
+    const result = await syncPlaud();
+    expect(result.newCount).toBe(1);
+    expect(lastWriteWith("runningSince").runningSince).toBeNull(); // cleared in finally
+  });
+
+  it("clears runningSince in finally even when not connected", async () => {
+    calls.connected = false;
+    const { syncPlaud } = await import("./sync");
+    await syncPlaud();
+    expect(lastWriteWith("runningSince").runningSince).toBeNull(); // lock acquired then cleared
   });
 });

@@ -12,6 +12,7 @@ export interface SyncResult {
   skippedCount: number;
   failedCount: number;
   deferredCount: number; // audio not downloadable from Plaud yet — retried next sync
+  note?: string; // set only when a run is skipped (e.g. already running)
   error?: string;
 }
 
@@ -48,25 +49,34 @@ export async function syncPlaud(): Promise<SyncResult> {
 
   const row = await getSyncRow();
 
-  if (!(await isConnected())) {
-    const result = { ...base, error: "not connected — connect Plaud in Settings" };
-    await writeResult(row.id, result);
-    return result;
+  // Concurrency guard: don't let a scheduled run overlap a manual/previous one
+  // (which would double-import + double-pay). Self-heals after the TTL if a run crashed.
+  const LOCK_TTL_MS = 30 * 60 * 1000;
+  if (row.runningSince && Date.now() - new Date(row.runningSince).getTime() < LOCK_TTL_MS) {
+    return { ...base, note: "skipped — a sync is already running" };
   }
-
-  const checkpointMs = row.lastSyncedAt ? new Date(row.lastSyncedAt).getTime() : 0;
-
-  let client;
-  try {
-    client = await connect();
-  } catch (e) {
-    console.error("[plaud sync] connect failed", e);
-    const result = { ...base, error: "reconnect needed — Plaud authorization expired" };
-    await writeResult(row.id, result); // checkpoint not advanced
-    return result;
-  }
+  await db.update(syncState).set({ runningSince: new Date() }).where(eq(syncState.id, row.id));
 
   try {
+    if (!(await isConnected())) {
+      const result = { ...base, error: "not connected — connect Plaud in Settings" };
+      await writeResult(row.id, result);
+      return result;
+    }
+
+    const checkpointMs = row.lastSyncedAt ? new Date(row.lastSyncedAt).getTime() : 0;
+
+    let client;
+    try {
+      client = await connect();
+    } catch (e) {
+      console.error("[plaud sync] connect failed", e);
+      const result = { ...base, error: "reconnect needed — Plaud authorization expired" };
+      await writeResult(row.id, result); // checkpoint not advanced
+      return result;
+    }
+
+    try {
     let all: PlaudFile[];
     try {
       const dateFrom = row.lastSyncedAt ? new Date(row.lastSyncedAt).toISOString() : undefined;
@@ -152,8 +162,11 @@ export async function syncPlaud(): Promise<SyncResult> {
     };
     await db.update(syncState).set({ lastSyncedAt: new Date(newCheckpointMs), lastResult: result }).where(eq(syncState.id, row.id));
     return result;
+    } finally {
+      await client.close();
+    }
   } finally {
-    await client.close();
+    await db.update(syncState).set({ runningSince: null }).where(eq(syncState.id, row.id));
   }
 }
 

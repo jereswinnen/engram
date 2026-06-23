@@ -3,7 +3,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
-type LastResult = { ranAt: string; newCount: number; skippedCount: number; failedCount: number; error?: string } | null;
+type LastResult = { ranAt: string; newCount: number; skippedCount: number; failedCount: number; deferredCount?: number; error?: string } | null;
+
+function summarize(r: { newCount: number; skippedCount: number; failedCount: number; deferredCount?: number }): string {
+  const parts = [`${r.newCount} new`, `${r.skippedCount} skipped`, `${r.failedCount} failed`];
+  if (r.deferredCount) parts.push(`${r.deferredCount} waiting for audio`);
+  return parts.join(", ");
+}
 
 export function PlaudSettings({ connected, lastResult, oauthStatus }: { connected: boolean; lastResult: LastResult; oauthStatus: string | null }) {
   const router = useRouter();
@@ -31,7 +37,7 @@ export function PlaudSettings({ connected, lastResult, oauthStatus }: { connecte
       const res = await fetch("/api/sync", { method: "POST" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "sync failed");
-      setStatus(json.error ? `Sync: ${json.error}` : `Sync complete — ${json.newCount} new, ${json.skippedCount} skipped, ${json.failedCount} failed.`);
+      setStatus(json.error ? `Sync: ${json.error}` : `Sync complete — ${summarize(json)}.`);
       router.refresh();
     } catch (e) { setStatus((e as Error).message); } finally { setBusy(false); }
   }
@@ -52,7 +58,7 @@ export function PlaudSettings({ connected, lastResult, oauthStatus }: { connecte
         <Button onClick={syncNow} disabled={busy || !connected}>Sync now</Button>
         {lastResult && (
           <p className="text-sm text-muted-foreground">
-            Last sync: {new Date(lastResult.ranAt).toLocaleString("en-GB")} — {lastResult.error ?? `${lastResult.newCount} new, ${lastResult.skippedCount} skipped, ${lastResult.failedCount} failed`}
+            Last sync: {new Date(lastResult.ranAt).toLocaleString("en-GB")} — {lastResult.error ?? summarize(lastResult)}
           </p>
         )}
       </div>

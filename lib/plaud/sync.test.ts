@@ -126,6 +126,32 @@ describe("syncPlaud", () => {
     expect(new Date(lastSet.lastSyncedAt).getTime()).toBe(1999);
   });
 
+  it("defers a recording whose audio isn't downloadable yet (presignedUrl null), without failing or advancing past it", async () => {
+    // f1=1000 succeeds, f2=2000 has no audio yet → deferred (retry next sync), f3=3000 succeeds.
+    const { getFile } = await import("./mcp/client");
+    (getFile as any).mockImplementation(async (_c: any, id: string) => ({
+      fileId: id, name: id, startAtMs: 0, trashed: false,
+      presignedUrl: id === "f2" ? null : `https://signed/${id}`,
+    }));
+    calls.files = [
+      { fileId: "f1", name: "One", startAtMs: 1000, trashed: false },
+      { fileId: "f2", name: "Two", startAtMs: 2000, trashed: false },
+      { fileId: "f3", name: "Three", startAtMs: 3000, trashed: false },
+    ];
+    const { syncPlaud } = await import("./sync");
+    const result = await syncPlaud();
+    expect(result.newCount).toBe(2);
+    expect(result.failedCount).toBe(0);
+    expect(result.deferredCount).toBe(1);
+    expect(result.error).toBeUndefined(); // deferred is not an error
+    expect(calls.deleted).toHaveLength(0); // nothing inserted for the deferred one
+    // checkpoint must stay before the deferred item (2000) so it's retried → 1999
+    const lastSet = calls.syncStateSet.at(-1);
+    expect(new Date(lastSet.lastSyncedAt).getTime()).toBe(1999);
+    (getFile as any).mockReset();
+    (getFile as any).mockImplementation(async (_c: any, id: string) => ({ fileId: id, name: id, startAtMs: 0, trashed: false, presignedUrl: `https://signed/${id}` }));
+  });
+
   it("does not run enhancement when transcription status is not 'transcribed'", async () => {
     calls.findFirstResult = { status: "error" };
     calls.files = [

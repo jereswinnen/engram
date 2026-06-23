@@ -31,8 +31,11 @@ describe("mapFile", () => {
 });
 
 describe("mapFileDetail", () => {
-  it("requires a presigned url", () => {
+  it("maps the presigned url when present", () => {
     expect(mapFileDetail({ id: "f1", start_at: "2026-06-01T10:00:00Z", presigned_url: "https://signed/a" }).presignedUrl).toBe("https://signed/a");
-    expect(() => mapFileDetail({ id: "f1", start_at: "2026-06-01T10:00:00Z" })).toThrow(/presigned/);
+  });
+  it("returns null (not a throw) when the audio isn't downloadable yet, so the sync can defer it", () => {
+    expect(mapFileDetail({ id: "f1", start_at: "2026-06-01T10:00:00Z" }).presignedUrl).toBeNull();
+    expect(mapFileDetail({ id: "f1", start_at: "2026-06-01T10:00:00Z", presigned_url: null }).presignedUrl).toBeNull();
   });
 });

@@ -11,6 +11,7 @@ export interface SyncResult {
   newCount: number;
   skippedCount: number;
   failedCount: number;
+  deferredCount: number; // audio not downloadable from Plaud yet — retried next sync
   error?: string;
 }
 
@@ -43,7 +44,7 @@ async function getSyncRow() {
 
 export async function syncPlaud(): Promise<SyncResult> {
   const ranAt = new Date().toISOString();
-  const base: SyncResult = { ranAt, newCount: 0, skippedCount: 0, failedCount: 0 };
+  const base: SyncResult = { ranAt, newCount: 0, skippedCount: 0, failedCount: 0, deferredCount: 0 };
 
   const row = await getSyncRow();
 
@@ -85,14 +86,25 @@ export async function syncPlaud(): Promise<SyncResult> {
 
     let newCount = 0;
     let failedCount = 0;
+    let deferredCount = 0;
     let maxSuccessMs = checkpointMs;
     let earliestFailureMs = Infinity;
+    let earliestDeferredMs = Infinity;
     let firstItemError: string | undefined;
 
     for (const r of candidates) {
       let insertedId: string | undefined;
       try {
         const detail = await getFile(client, r.fileId);
+        if (!detail.presignedUrl) {
+          // Plaud has the recording but the audio isn't downloadable yet (still
+          // processing). Defer: don't import, don't count as a failure — leave the
+          // checkpoint before it so the next sync retries once the audio is ready.
+          deferredCount++;
+          earliestDeferredMs = Math.min(earliestDeferredMs, r.startAtMs);
+          console.info("[plaud sync] deferring (audio not ready)", r.fileId);
+          continue;
+        }
         const { bytes, contentType } = await downloadAudio(detail.presignedUrl);
         const [rec] = await db
           .insert(recordings)
@@ -128,10 +140,14 @@ export async function syncPlaud(): Promise<SyncResult> {
       }
     }
 
+    // Don't advance the checkpoint past the earliest blocker (a real failure OR a
+    // deferred audio-not-ready item), so both are retried on the next sync.
+    const earliestBlockerMs = Math.min(earliestFailureMs, earliestDeferredMs);
     const newCheckpointMs =
-      earliestFailureMs === Infinity ? maxSuccessMs : Math.max(checkpointMs, earliestFailureMs - 1);
+      earliestBlockerMs === Infinity ? maxSuccessMs : Math.max(checkpointMs, earliestBlockerMs - 1);
     const result: SyncResult = {
-      ranAt, newCount, skippedCount, failedCount,
+      ranAt, newCount, skippedCount, failedCount, deferredCount,
+      // Only a genuine failure is an error; deferred items are normal (surfaced in the count).
       ...(failedCount > 0 && firstItemError ? { error: `first failure: ${firstItemError}` } : {}),
     };
     await db.update(syncState).set({ lastSyncedAt: new Date(newCheckpointMs), lastResult: result }).where(eq(syncState.id, row.id));

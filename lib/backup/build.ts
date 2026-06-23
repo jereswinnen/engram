@@ -1,4 +1,4 @@
-import { Readable, PassThrough } from "node:stream";
+import { Readable, Transform } from "node:stream";
 import { ZipArchive } from "archiver";
 import { eq, desc } from "drizzle-orm";
 import { db } from "@/db";
@@ -18,14 +18,21 @@ export async function buildBackup(id: string): Promise<void> {
     archive.on("error", (err) => {
       void markError(id, err instanceof Error ? err.message : String(err));
     });
-    const counter = new PassThrough();
     let size = 0;
-    counter.on("data", (chunk: Buffer) => { size += chunk.length; });
+    // Counting Transform is the SOLE consumer of the archive stream — no data listener,
+    // so the stream stays in paused mode and putStream's for-await sees every byte.
+    const counter = new Transform({
+      transform(chunk, _enc, cb) {
+        size += chunk.length;
+        cb(null, chunk);
+      },
+    });
     archive.pipe(counter);
 
     const key = `backups/${id}.zip`;
-    // putStream consumes the counter stream; run concurrently with appends.
     const upload = storage.putStream(key, counter, "application/zip");
+    // If the upload fails, destroy the archive so nothing is left un-drained (prevents a hang).
+    upload.catch((err) => archive.destroy(err instanceof Error ? err : new Error(String(err))));
 
     const manifest = { createdAt: new Date().toISOString(), recordings: [] as any[], errors: [] as any[] };
 
@@ -48,7 +55,9 @@ export async function buildBackup(id: string): Promise<void> {
     }
 
     archive.append(JSON.stringify(manifest, null, 2), { name: "manifest.json" });
-    await archive.finalize();
+    // Do NOT await finalize() before upload — with the Transform consumed solely by the
+    // upload, awaiting finalize first could deadlock on backpressure.
+    archive.finalize();
     await upload;
     await markReady(id, key, size);
   } catch (e) {

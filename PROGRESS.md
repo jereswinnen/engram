@@ -82,7 +82,7 @@ network. Full design + plan in
       Postgres FTS with `websearch_to_tsquery`, GIN index, ranked results, highlighted snippets, and deep-linking to matching segments.
 - [x] **Export & backup** (COMPLETE)
       Spec: [Export & Backup Design](docs/superpowers/specs/2026-06-23-engram-export-backup-design.md)
-      Per-recording export (Markdown / JSON / copy / download), full backup (data + audio zip → R2 → presigned download), Settings UI with status polling and resume support.
+      Per-recording export (Markdown / JSON / copy / download), full backup (data + audio zip → R2 → presigned download), Settings UI with status polling (no mid-build resume: a container restart during a build leaves that backup pending — just create another).
 
 **✅ ALL PHASE 1+ SLICES COMPLETE** — Waveform, search, and export & backup are live. Next: Phase 2 AI layer (speaker naming, multi-view summaries, Ask-Engram RAG).
 

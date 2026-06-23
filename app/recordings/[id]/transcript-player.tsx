@@ -15,7 +15,7 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-type Chapter = { title: string; gist: string; startSeconds?: number };
+type Chapter = { title: string; gist: string; startSeconds?: number | null };
 
 export function TranscriptPlayer({
   audioSrc,

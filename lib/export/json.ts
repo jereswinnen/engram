@@ -5,10 +5,10 @@ interface Tr { language: string | null; fullText: string; segments: { start: num
 interface Enh {
   title: string | null;
   overview: string;
-  actionItems: { text: string; owner?: string; due?: string }[];
+  actionItems: { text: string; owner?: string | null; due?: string | null }[];
   keyPoints: string[];
   decisions: string[];
-  chapters: { title: string; gist: string; startSeconds?: number }[];
+  chapters: { title: string; gist: string; startSeconds?: number | null }[];
   openQuestions: string[];
 }
 
@@ -27,10 +27,10 @@ export interface ExportRecord {
   enhancement: {
     title: string | null;
     overview: string;
-    actionItems: { text: string; owner?: string; due?: string }[];
+    actionItems: { text: string; owner?: string | null; due?: string | null }[];
     keyPoints: string[];
     decisions: string[];
-    chapters: { title: string; gist: string; startSeconds?: number }[];
+    chapters: { title: string; gist: string; startSeconds?: number | null }[];
     openQuestions: string[];
   } | null;
 }

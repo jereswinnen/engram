@@ -9,8 +9,8 @@ export const enhancementSchema = z.object({
     .array(
       z.object({
         text: z.string().describe("The action to take"),
-        owner: z.string().optional().describe("The responsible speaker's name, if clear from the transcript"),
-        due: z.string().optional().describe("Due date/timeframe exactly as stated, if any"),
+        owner: z.string().nullable().describe("The responsible speaker's name, if clear from the transcript"),
+        due: z.string().nullable().describe("Due date/timeframe exactly as stated, if any"),
       }),
     )
     .describe("Concrete action items"),
@@ -19,7 +19,7 @@ export const enhancementSchema = z.object({
       z.object({
         title: z.string(),
         gist: z.string().describe("One-line summary of the section"),
-        startSeconds: z.number().optional().describe("Approx start time in seconds, from the [mm:ss] timestamps"),
+        startSeconds: z.number().nullable().describe("Approx start time in seconds, from the [mm:ss] timestamps"),
       }),
     )
     .describe("Topic outline / chapters in chronological order"),

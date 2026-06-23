@@ -276,6 +276,19 @@ If cost is a concern, keep your glossary empty (no-op, zero overhead) or use it 
 
 ---
 
+## Phase 1+ — Export & Backup
+
+Engram provides per-recording export (Markdown, JSON, copy to clipboard) and a full backup feature that archives all recordings and metadata as a zip file to R2.
+
+### Backup storage and generation
+
+- **Storage location:** Backups are stored in R2 under the `backups/` prefix (same bucket as recordings).
+- **Async generation:** Backup creation is fire-and-forget. When a user initiates a backup, the request queues the job on the persistent container and returns immediately with a backup ID. The job runs asynchronously, compressing recordings + metadata into a zip, uploading to R2, and storing the result metadata in the `backups` table.
+- **No new env vars:** Backup uses the existing R2 credentials (`R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`). No additional configuration is needed.
+- **Migration:** The `backups` table is created by migration `0005` and is applied automatically by the existing `preDeployCommand: pnpm db:migrate` on every deploy.
+
+---
+
 ## Known footguns
 
 - **Local `next build` / `pnpm dev` without env vars set will throw at import time.**

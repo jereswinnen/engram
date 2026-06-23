@@ -184,3 +184,12 @@ export const glossary = pgTable("glossary", {
   aliases: jsonb("aliases").notNull().$type<string[]>().default([]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+export const backups = pgTable("backups", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  status: text("status").notNull().default("pending"),
+  storageKey: text("storage_key"),
+  sizeBytes: integer("size_bytes"),
+  error: text("error"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});

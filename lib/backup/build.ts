@@ -15,6 +15,9 @@ export async function buildBackup(id: string): Promise<void> {
     const storage = getStorage();
 
     const archive = new ZipArchive({ zlib: { level: 9 } });
+    archive.on("error", (err) => {
+      void markError(id, err instanceof Error ? err.message : String(err));
+    });
     const counter = new PassThrough();
     let size = 0;
     counter.on("data", (chunk: Buffer) => { size += chunk.length; });
@@ -53,7 +56,8 @@ export async function buildBackup(id: string): Promise<void> {
   }
 }
 
-function audioExt(contentType: string): string {
+function audioExt(contentType: string | null | undefined): string {
+  if (!contentType) return "mp3";
   if (contentType.includes("mp4") || contentType.includes("m4a") || contentType.includes("aac")) return "m4a";
   if (contentType.includes("wav")) return "wav";
   if (contentType.includes("ogg") || contentType.includes("opus")) return "ogg";

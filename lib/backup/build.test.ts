@@ -24,33 +24,56 @@ vi.mock("@/db", () => ({
   },
 }));
 // archiver: a fake ZipArchive class recording appends + finalize
+// Captures "error" callbacks so tests can verify the listener wiring.
 vi.mock("archiver", () => ({
   ZipArchive: class {
     entries: string[] = [];
+    _errorCbs: Function[] = [];
     append(_body: unknown, opts: any) { this.entries.push(opts.name); calls.archive = this; }
-    async finalize() {}
-    on() { return this; }
+    on(event: string, cb: Function) {
+      if (event === "error") this._errorCbs.push(cb);
+      return this;
+    }
+    async finalize() {
+      if (calls.triggerArchiveError) {
+        this._errorCbs.forEach((cb: Function) => cb(new Error("archive boom")));
+      }
+    }
     pipe() { return this; }
   },
 }));
 // global.fetch for audio
-beforeEach(() => { calls.recs = []; calls.ready = undefined; calls.error = undefined; calls.uploaded = false;
-  vi.spyOn(global, "fetch").mockResolvedValue(new Response("audiobytes", { status: 200 })); });
+beforeEach(() => {
+  calls.recs = [];
+  calls.ready = undefined;
+  calls.error = undefined;
+  calls.uploaded = false;
+  calls.triggerArchiveError = false;
+  vi.spyOn(global, "fetch").mockResolvedValue(new Response("audiobytes", { status: 200 }));
+});
 
 describe("buildBackup", () => {
-  it("marks ready and appends manifest after processing recordings", async () => {
-    calls.recs = [{ id: "r1", title: "A", source: "plaud", createdAt: new Date(), durationSeconds: 1, status: "done", storageKey: "audio/r1.mp3" }];
+  it("marks ready, appends manifest, and appends audio entry after processing recordings", async () => {
+    calls.recs = [{ id: "r1", title: "A", source: "plaud", createdAt: new Date(), durationSeconds: 1, status: "done", storageKey: "audio/r1.mp3", contentType: "audio/mpeg" }];
     const { buildBackup } = await import("./build");
     await buildBackup("b1");
     expect(calls.ready?.id).toBe("b1");
     expect(calls.archive.entries).toContain("manifest.json");
+    expect(calls.archive.entries).toContain("recordings/r1/x.mp3");
     expect(calls.error).toBeUndefined();
   });
   it("skips a recording whose audio fetch fails but still completes", async () => {
     (global.fetch as any).mockResolvedValueOnce(new Response("nope", { status: 404 }));
-    calls.recs = [{ id: "r1", title: "A", source: "plaud", createdAt: new Date(), durationSeconds: 1, status: "done", storageKey: "audio/r1.mp3" }];
+    calls.recs = [{ id: "r1", title: "A", source: "plaud", createdAt: new Date(), durationSeconds: 1, status: "done", storageKey: "audio/r1.mp3", contentType: "audio/mpeg" }];
     const { buildBackup } = await import("./build");
     await buildBackup("b1");
     expect(calls.ready?.id).toBe("b1"); // still ready, not error
+  });
+  it("calls markError when the archiver emits an error event", async () => {
+    calls.triggerArchiveError = true;
+    const { buildBackup } = await import("./build");
+    await buildBackup("b2");
+    expect(calls.error?.id).toBe("b2");
+    expect(calls.error?.err).toContain("archive boom");
   });
 });

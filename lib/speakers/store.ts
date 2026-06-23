@@ -2,9 +2,11 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { speakers, recordingSpeakers } from "@/db/schema";
 
+// Names are stored/displayed as entered; dedupe is case-insensitive.
 export async function findOrCreateSpeaker(name: string): Promise<{ id: string; name: string }> {
-  const clean = name.trim().toLowerCase();
-  const existing = await db.query.speakers.findFirst({ where: eq(speakers.name, clean) });
+  const clean = name.trim();
+  const all = await db.query.speakers.findMany();
+  const existing = all.find((s) => s.name.toLowerCase() === clean.toLowerCase());
   if (existing) return { id: existing.id, name: existing.name };
   const [row] = await db.insert(speakers).values({ name: clean }).returning();
   return { id: row.id, name: row.name };

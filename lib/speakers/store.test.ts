@@ -120,12 +120,13 @@ beforeEach(() => {
 });
 
 describe("speakers store", () => {
-  it("findOrCreateSpeaker: returns existing on second call with same name (case-insensitive, trimmed)", async () => {
+  it("findOrCreateSpeaker: dedupes case-insensitively and preserves original casing", async () => {
     const { findOrCreateSpeaker } = await import("./store");
-    const r1 = await findOrCreateSpeaker("Alice");
-    const r2 = await findOrCreateSpeaker("alice");
+    const r1 = await findOrCreateSpeaker("Bjorn");
+    const r2 = await findOrCreateSpeaker(" bjorn ");
     expect(r1.id).toBe(r2.id);
-    expect(r1.name).toBe("alice");
+    expect(r1.name).toBe("Bjorn"); // original casing preserved
+    expect(r2.name).toBe("Bjorn"); // same stored casing returned for variant
     expect(speakersRows).toHaveLength(1);
   });
 
@@ -134,7 +135,7 @@ describe("speakers store", () => {
     const r1 = await findOrCreateSpeaker("  Bob  ");
     const r2 = await findOrCreateSpeaker("bob");
     expect(r1.id).toBe(r2.id);
-    expect(r1.name).toBe("bob");
+    expect(r1.name).toBe("Bob"); // trimmed, original casing preserved from first entry
   });
 
   it("setRecordingSpeaker: upserts a (recordingId, label) mapping", async () => {
@@ -146,7 +147,7 @@ describe("speakers store", () => {
     // Update same (recordingId, label) with a different speaker
     await setRecordingSpeaker("rec1", "A", "Bob");
     expect(rsRows).toHaveLength(1); // still one row — updated in place
-    const bobSpeaker = speakersRows.find((s) => s.name === "bob");
+    const bobSpeaker = speakersRows.find((s) => s.name === "Bob");
     expect(rsRows[0].speakerId).toBe(bobSpeaker?.id);
   });
 
@@ -163,7 +164,7 @@ describe("speakers store", () => {
     await setRecordingSpeaker("rec1", "Speaker 1", "Alice");
     await setRecordingSpeaker("rec1", "Speaker 2", "Bob");
     const map = await getRecordingSpeakerMap("rec1");
-    expect(map).toEqual({ "Speaker 1": "alice", "Speaker 2": "bob" });
+    expect(map).toEqual({ "Speaker 1": "Alice", "Speaker 2": "Bob" });
   });
 
   it("getRecordingSpeakerMap: returns empty object when no mappings exist", async () => {
@@ -178,6 +179,6 @@ describe("speakers store", () => {
     await findOrCreateSpeaker("Bob");
     const list = await listSpeakers();
     expect(list).toHaveLength(2);
-    expect(list.map((s) => s.name).sort()).toEqual(["alice", "bob"]);
+    expect(list.map((s) => s.name).sort()).toEqual(["Alice", "Bob"]);
   });
 });

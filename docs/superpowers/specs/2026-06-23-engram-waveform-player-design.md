@@ -13,7 +13,7 @@ Replace the bare `<audio controls>` on the recording detail page with a Wavesurf
 | Area | Decision |
 |---|---|
 | Library | `wavesurfer.js` v7 (new client dependency). |
-| Waveform style | **Bars** (SoundCloud-style), moderate count: `barWidth: 3`, `barGap: 2`, `barRadius: 3` (tunable). Colors tuned to the dark UI — `waveColor` muted (e.g. `#3f3f46`), `progressColor` light/accent (e.g. `#a1a1aa`); resolved from the theme where practical, else these constants. |
+| Waveform style | **Rounded bars with comfortable spacing** — i.e. set `barWidth`, `barGap`, `barRadius` so the waveform reads as tidy rounded bars, not a dense solid wave. The example's exact numbers are illustrative only; tune the values by eye during the build (a sensible starting point: `barWidth: 3`, `barGap: 2`, `barRadius: 3`). Colors tuned to the dark UI — `waveColor` muted (e.g. `#3f3f46`), `progressColor` light/accent (e.g. `#a1a1aa`); resolved from the theme where practical, else these constants. |
 | Backend | Wavesurfer **MediaElement** backend so playback streams immediately; the waveform fills in as audio loads. |
 | Sync | Two-way: click segment → `setTime(start)`; `timeupdate` → highlight + `scrollIntoView` the active segment. |
 | Audio source | Existing `/api/recordings/[id]/audio` (302 → presigned R2 URL; Wavesurfer follows the redirect). No API change. |

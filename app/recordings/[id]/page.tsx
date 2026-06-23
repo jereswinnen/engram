@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import RetryButton from "./retry-button";
 import { requireSession } from "@/lib/auth-guard";
+import { TranscriptPlayer } from "./transcript-player";
 
 export default async function RecordingPage({
   params,
@@ -49,8 +50,11 @@ export default async function RecordingPage({
 
       <h1 className="text-xl font-semibold">{recording.title}</h1>
 
-      {/* Audio player */}
-      <audio controls src={`/api/recordings/${id}/audio`} className="w-full" />
+      {/* Waveform player + transcript */}
+      <TranscriptPlayer
+        audioSrc={`/api/recordings/${id}/audio`}
+        segments={transcription?.segments ?? []}
+      />
 
       {/* Error state */}
       {isError && (
@@ -105,36 +109,6 @@ export default async function RecordingPage({
         </CardContent>
       </Card>
 
-      {/* Transcript */}
-      {transcription && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Transcript</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-2 text-sm font-mono">
-              {transcription.segments.map((seg, i) => (
-                <div key={i}>
-                  <span className="text-muted-foreground text-xs">
-                    {formatTime(seg.start)}
-                  </span>{" "}
-                  <span className="font-medium">
-                    Speaker {seg.speaker ?? "?"}
-                  </span>
-                  {": "}
-                  {seg.text}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
-}
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
 }

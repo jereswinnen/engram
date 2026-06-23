@@ -74,7 +74,9 @@ network. Full design + plan in
 
 ### Phase 1+ — deferred UX features
 
-- [ ] Waveform player (Wavesurfer.js) + click-to-seek between transcript and audio
+- [x] **Waveform player (Wavesurfer.js) + click-to-seek** (COMPLETE)
+      Spec: [Phase 1+ Waveform Player Design](docs/superpowers/specs/2026-06-23-engram-waveform-player-design.md)
+      Includes Wavesurfer.js rounded-bar waveform with two-way transcript sync (click segment to seek, active segment highlights + auto-scroll during playback).
 - [ ] Full-text search across all transcripts
 - [ ] Export: JSON / TXT / SRT-VTT subtitles / one-click full backup
 - [ ] Browser notifications when a recording finishes (no email — per project decision)

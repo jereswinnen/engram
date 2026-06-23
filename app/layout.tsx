@@ -37,6 +37,12 @@ export default function RootLayout({
               Upload
             </Link>
             <Link
+              href="/search"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Search
+            </Link>
+            <Link
               href="/settings"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >

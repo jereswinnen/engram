@@ -17,7 +17,7 @@ Let the single user maintain a glossary of their own terms — Belgian-tech jarg
 | Alias correction | Deterministic, **word-boundary-aware + case-insensitive** replace of aliases → canonical, applied to the transcript after Scribe. No LLM. Free. |
 | Summary injection | The glossary's canonical terms are injected into the enhance system prompt so summaries spell terms correctly. ≈free. |
 | Empty-glossary | **Total no-op** — no `keyterms` sent (so no +20% cost), no correction, no prompt block. Zero behavior change until terms exist. |
-| Lossless | Raw Scribe output stays in `transcriptions.raw`; correction only changes `fullText` + `segments`. |
+| Lossless | Raw Scribe output stays in `transcriptions.rawText`; correction only changes `fullText` + `segments`. |
 | Application window | New recordings going forward. Re-processing existing recordings is out of scope (would cost a re-transcribe). |
 | Management UI | A "Glossary" section in the existing Settings page (CRUD). |
 
@@ -36,7 +36,7 @@ upload or Plaud sync → runTranscription:
   → toKeyterms(entries) → (if non-empty) pass as Scribe `keyterms`     [bias up front, +20% cost only when non-empty]
   → Scribe returns text + segments
   → applyAliasCorrections() on fullText AND each segment.text          [deterministic alias→canonical]
-  → store transcription (raw Scribe JSON kept in `raw`)
+  → store transcription (raw Scribe JSON kept in `rawText`)
 runEnhancement:
   load glossary → glossaryPromptBlock(entries) appended to the enhance system prompt → store summary
 ```

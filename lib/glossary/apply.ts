@@ -18,6 +18,8 @@ export function toKeyterms(entries: GlossaryLike[]): string[] {
     out.push(term);
     if (out.length >= 1000) break;
   }
+  const dropped = entries.length - out.length;
+  if (dropped > 0) console.warn(`[glossary] toKeyterms dropped ${dropped} term(s) exceeding Scribe limits`);
   return out;
 }
 
@@ -49,7 +51,14 @@ export function applyAliasCorrections(text: string, entries: GlossaryLike[]): st
 }
 
 export function glossaryPromptBlock(entries: GlossaryLike[]): string {
-  const terms = entries.map((e) => (e.term ?? "").trim()).filter(Boolean);
-  if (terms.length === 0) return "";
-  return `Gebruik de correcte spelling voor deze termen/namen: ${terms.join(", ")}.`;
+  const parts = entries
+    .map((e) => {
+      const term = (e.term ?? "").trim();
+      if (!term) return null;
+      const aliases = (e.aliases ?? []).filter(Boolean);
+      return aliases.length > 0 ? `${term} (ook: ${aliases.join(", ")})` : term;
+    })
+    .filter(Boolean) as string[];
+  if (parts.length === 0) return "";
+  return `Gebruik de correcte spelling voor deze termen/namen: ${parts.join(", ")}.`;
 }

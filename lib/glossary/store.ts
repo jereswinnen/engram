@@ -11,7 +11,7 @@ export interface GlossaryEntry {
 
 export async function getGlossary(): Promise<GlossaryEntry[]> {
   const rows = await db.query.glossary.findMany();
-  return rows.map((r: any) => ({ id: r.id, term: r.term, aliases: r.aliases ?? [], createdAt: r.createdAt }));
+  return rows.map((r) => ({ id: r.id, term: r.term, aliases: r.aliases ?? [], createdAt: r.createdAt }));
 }
 
 export async function addEntry(input: { term: string; aliases?: string[] }): Promise<GlossaryEntry> {

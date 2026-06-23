@@ -43,4 +43,12 @@ describe("glossaryPromptBlock", () => {
   it("lists the canonical terms", () => {
     expect(glossaryPromptBlock([g("Riffado"), g("Engram")])).toContain("Riffado");
   });
+  it("renders aliases with ook: prefix for entries that have them", () => {
+    const result = glossaryPromptBlock([g("Riffado", ["Rifado", "Riffadoo"]), g("Engram")]);
+    expect(result).toContain("Riffado (ook: Rifado, Riffadoo)");
+    expect(result).toContain("Engram");
+  });
+  it("renders no-alias entries without parentheses", () => {
+    expect(glossaryPromptBlock([g("Engram")])).toBe("Gebruik de correcte spelling voor deze termen/namen: Engram.");
+  });
 });

@@ -17,7 +17,7 @@ export async function runTranscription(id: string): Promise<void> {
     await setStatus(id, "transcribing");
     const rec = await db.query.recordings.findFirst({ where: eq(recordings.id, id) });
     if (!rec) throw new Error(`recording ${id} not found`);
-    const glossary = await getGlossary();
+    const glossary = await getGlossary().catch(() => []);
     const url = await getStorage().presignedGetUrl(rec.storageKey, 3600);
     const result = await transcribeWithScribe({ cloudStorageUrl: url }, { keyterms: toKeyterms(glossary) });
     const correctedText = applyAliasCorrections(result.text, glossary);
@@ -44,7 +44,7 @@ export async function runEnhancement(id: string): Promise<void> {
     await setStatus(id, "enhancing");
     const t = await db.query.transcriptions.findFirst({ where: eq(transcriptions.recordingId, id), orderBy: [desc(transcriptions.createdAt)] });
     if (!t) throw new Error(`transcription for ${id} not found`);
-    const glossary = await getGlossary();
+    const glossary = await getGlossary().catch(() => []);
     const e = await enhanceTranscript(t.fullText, { glossaryBlock: glossaryPromptBlock(glossary) });
     await db.insert(aiEnhancements).values({
       recordingId: id,

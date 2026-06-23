@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const updates: any[] = [];
+let glossaryFails = false;
+
 vi.mock("@/db", () => ({
   db: {
     update: () => ({ set: (v: any) => ({ where: async () => { updates.push(v); } }) }),
     query: {
       recordings: { findFirst: async () => ({ id: "r1", storageKey: "audio/r1.mp3" }) },
       transcriptions: { findFirst: async () => ({ recordingId: "r1", fullText: "hoi" }) },
-      glossary: { findMany: async () => [] },
+      glossary: { findMany: async () => { if (glossaryFails) throw new Error("DB gone"); return []; } },
     },
     insert: () => ({ values: async () => {} }),
   },
@@ -31,7 +33,10 @@ vi.mock("@/lib/config", () => ({
   config: { llmModel: () => "claude-3-haiku" },
 }));
 
-beforeEach(() => { updates.length = 0; });
+beforeEach(() => {
+  updates.length = 0;
+  glossaryFails = false;
+});
 
 describe("runTranscription", () => {
   it("sets transcribing then transcribed", async () => {
@@ -46,6 +51,13 @@ describe("runTranscription", () => {
     const { runTranscription } = await import("./pipeline");
     await runTranscription("r1");
     expect(updates.at(-1).status).toBe("error");
+  });
+
+  it("degrades gracefully when glossary DB fails (still reaches transcribed)", async () => {
+    glossaryFails = true;
+    const { runTranscription } = await import("./pipeline");
+    await runTranscription("r1");
+    expect(updates.map((u) => u.status)).toEqual(["transcribing", "transcribed"]);
   });
 });
 

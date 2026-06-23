@@ -40,7 +40,9 @@ export function applyAliasCorrections(text: string, entries: GlossaryLike[]): st
   pairs.sort((a, b) => b.alias.length - a.alias.length);
   let result = text;
   for (const { alias, canonical } of pairs) {
-    const re = new RegExp(`\\b${escapeRegExp(alias)}\\b`, "gi");
+    const startAnchor = /^\w/.test(alias) ? "\\b" : "(?<!\\w)";
+    const endAnchor = /\w$/.test(alias) ? "\\b" : "(?!\\w)";
+    const re = new RegExp(`${startAnchor}${escapeRegExp(alias)}${endAnchor}`, "gi");
     result = result.replace(re, canonical);
   }
   return result;

@@ -31,6 +31,9 @@ describe("applyAliasCorrections", () => {
   it("is a no-op for an empty glossary", () => {
     expect(applyAliasCorrections("unchanged", [])).toBe("unchanged");
   });
+  it("handles punctuated aliases with conditional word boundaries", () => {
+    expect(applyAliasCorrections("We discussed A.I. today", [g("Artificial Intelligence", ["A.I."])])).toBe("We discussed Artificial Intelligence today");
+  });
 });
 
 describe("glossaryPromptBlock", () => {

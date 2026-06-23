@@ -1,6 +1,8 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { config } from "@/lib/config";
+import type { Readable } from "node:stream";
 import type { Storage } from "./types";
 
 export function createR2Storage(): Storage {
@@ -18,6 +20,12 @@ export function createR2Storage(): Storage {
     },
     async presignedGetUrl(key, ttlSeconds = 3600) {
       return getSignedUrl(client, new GetObjectCommand({ Bucket: r2.bucket, Key: key }), { expiresIn: ttlSeconds });
+    },
+    async putStream(key, body, contentType) {
+      await new Upload({
+        client,
+        params: { Bucket: r2.bucket, Key: key, Body: body as Readable, ContentType: contentType },
+      }).done();
     },
     async delete(key) {
       await client.send(new DeleteObjectCommand({ Bucket: r2.bucket, Key: key }));

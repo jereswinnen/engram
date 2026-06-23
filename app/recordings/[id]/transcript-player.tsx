@@ -13,7 +13,9 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export function TranscriptPlayer({ audioSrc, segments, highlightQuery }: { audioSrc: string; segments: Segment[]; highlightQuery?: string }) {
+type Chapter = { title: string; gist: string; startSeconds?: number };
+
+export function TranscriptPlayer({ audioSrc, segments, highlightQuery, chapters }: { audioSrc: string; segments: Segment[]; highlightQuery?: string; chapters?: Chapter[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WaveSurfer | null>(null);
   const segmentRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -98,6 +100,23 @@ export function TranscriptPlayer({ audioSrc, segments, highlightQuery }: { audio
 
       <div ref={containerRef} className="w-full" />
       {error && <p className="text-sm text-destructive">Audio unavailable.</p>}
+
+      {chapters && chapters.length > 0 && (
+        <div className="flex flex-col gap-1 text-sm">
+          <h3 className="font-medium">Chapters</h3>
+          {chapters.map((c, i) => {
+            const seekable = c.startSeconds != null && c.startSeconds >= 0 && (duration === 0 || c.startSeconds <= duration);
+            return (
+              <button key={i} type="button" disabled={!seekable}
+                onClick={() => { if (seekable) wsRef.current?.setTime(c.startSeconds!); }}
+                className="text-left disabled:opacity-60">
+                {c.startSeconds != null && <span className="text-muted-foreground text-xs tabular-nums">{formatTime(c.startSeconds)} </span>}
+                <span className="font-medium">{c.title}</span> — <span className="text-muted-foreground">{c.gist}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {segments.length > 0 && (
         <div className="mt-2 flex max-h-96 flex-col gap-1 overflow-y-auto text-sm font-mono">

@@ -70,6 +70,7 @@ export default async function RecordingPage({
         audioSrc={`/api/recordings/${id}/audio`}
         segments={transcription?.segments ?? []}
         highlightQuery={q}
+        chapters={enhancement?.chapters ?? []}
       />
 
       {/* Error state */}

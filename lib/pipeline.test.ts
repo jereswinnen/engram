@@ -8,7 +8,7 @@ vi.mock("@/db", () => ({
     update: () => ({ set: (v: any) => ({ where: async () => { updates.push(v); } }) }),
     query: {
       recordings: { findFirst: async () => ({ id: "r1", storageKey: "audio/r1.mp3" }) },
-      transcriptions: { findFirst: async () => ({ recordingId: "r1", fullText: "hoi" }) },
+      transcriptions: { findFirst: async () => ({ recordingId: "r1", fullText: "hoi", segments: [] }) },
       glossary: { findMany: async () => { if (glossaryFails) throw new Error("DB gone"); return []; } },
     },
     insert: () => ({ values: async () => {} }),
@@ -24,9 +24,12 @@ vi.mock("@/lib/transcription/scribe", () => ({
 vi.mock("@/lib/ai/enhance", () => ({
   enhanceTranscript: vi.fn(async () => ({
     title: "T",
-    summary: "S",
-    actionItems: [],
+    overview: "O",
     keyPoints: [],
+    decisions: [],
+    actionItems: [],
+    chapters: [],
+    openQuestions: [],
   })),
 }));
 vi.mock("@/lib/config", () => ({

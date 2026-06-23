@@ -41,7 +41,7 @@ export async function buildBackup(id: string): Promise<void> {
       const [tr, enh, speakerMap] = await Promise.all([
         db.query.transcriptions.findFirst({ where: eq(transcriptions.recordingId, rec.id), orderBy: [desc(transcriptions.createdAt)] }),
         db.query.aiEnhancements.findFirst({ where: eq(aiEnhancements.recordingId, rec.id), orderBy: [desc(aiEnhancements.createdAt)] }),
-        getRecordingSpeakerMap(rec.id),
+        getRecordingSpeakerMap(rec.id).catch(() => ({} as Record<string, string>)),
       ]);
       const folder = `recordings/${rec.id}`;
       archive.append(recordingToMarkdown(rec, tr ?? null, enh ?? null, speakerMap), { name: `${folder}/transcript.md` });

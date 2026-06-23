@@ -18,6 +18,8 @@ export interface ScribeOptions {
   numSpeakers?: number;
   /** Tag (laughter), (music), etc. as audio events. */
   tagAudioEvents?: boolean;
+  /** Bias transcription toward these terms (Scribe `keyterms`). Sent only when non-empty. */
+  keyterms?: string[];
 }
 
 interface ScribeWord {
@@ -75,6 +77,9 @@ export async function transcribeWithScribe(
   if (options.languageCode) form.append("language_code", options.languageCode);
   if (options.numSpeakers) form.append("num_speakers", String(options.numSpeakers));
   if (options.tagAudioEvents) form.append("tag_audio_events", "true");
+  if (options.keyterms && options.keyterms.length > 0) {
+    form.append("keyterms", JSON.stringify(options.keyterms));
+  }
 
   // Prefer a cloud URL (S3/R2 presigned) to avoid moving bytes through the app.
   if (input.cloudStorageUrl) {

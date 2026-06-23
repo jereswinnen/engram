@@ -111,6 +111,7 @@ export const transcriptions = pgTable("transcriptions", {
   id: uuid("id").primaryKey().defaultRandom(),
   recordingId: uuid("recording_id").notNull().references(() => recordings.id, { onDelete: "cascade" }),
   fullText: text("full_text").notNull(),
+  rawText: text("raw_text"),
   language: text("language"),
   segments: jsonb("segments").notNull().$type<{ start: number; end: number; text: string; speaker?: string }[]>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -160,4 +161,11 @@ export const syncState = pgTable("sync_state", {
     failedCount: number;
     error?: string;
   }>(),
+});
+
+export const glossary = pgTable("glossary", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  term: text("term").notNull(),
+  aliases: jsonb("aliases").notNull().$type<string[]>().default([]),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });

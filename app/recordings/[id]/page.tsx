@@ -10,9 +10,20 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import RetryButton from "./retry-button";
+import RegenerateButton from "./regenerate-button";
 import { requireSession } from "@/lib/auth-guard";
 import { TranscriptPlayer } from "./transcript-player";
 import { ExportButtons } from "./export-buttons";
+import { getRecordingSpeakerMap, listSpeakers } from "@/lib/speakers/store";
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <h3 className="font-medium">{title}</h3>
+      {children}
+    </div>
+  );
+}
 
 export default async function RecordingPage({
   params,
@@ -26,7 +37,7 @@ export default async function RecordingPage({
   const { id } = await params;
   const { q } = await searchParams;
 
-  const [recording, transcription, enhancement] = await Promise.all([
+  const [recording, transcription, enhancement, speakerMap, speakerDirectory] = await Promise.all([
     db.query.recordings.findFirst({ where: eq(recordings.id, id) }),
     db.query.transcriptions.findFirst({
       where: eq(transcriptions.recordingId, id),
@@ -36,6 +47,8 @@ export default async function RecordingPage({
       where: eq(aiEnhancements.recordingId, id),
       orderBy: [desc(aiEnhancements.createdAt)],
     }),
+    getRecordingSpeakerMap(id),
+    listSpeakers(),
   ]);
 
   if (!recording) notFound();
@@ -61,6 +74,10 @@ export default async function RecordingPage({
         audioSrc={`/api/recordings/${id}/audio`}
         segments={transcription?.segments ?? []}
         highlightQuery={q}
+        chapters={enhancement?.chapters ?? []}
+        speakerMap={speakerMap}
+        directory={speakerDirectory.map((s) => s.name)}
+        recordingId={id}
       />
 
       {/* Error state */}
@@ -87,31 +104,50 @@ export default async function RecordingPage({
         </CardHeader>
         <CardContent>
           {isDone && enhancement ? (
-            <div className="flex flex-col gap-4">
-              <p className="text-sm">{enhancement.summary}</p>
-              {enhancement.actionItems.length > 0 && (
-                <div>
-                  <p className="text-sm font-medium mb-1">Action items</p>
-                  <ul className="list-disc pl-4 text-sm flex flex-col gap-1">
-                    {enhancement.actionItems.map((item, i) => (
-                      <li key={i}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+            <div className="flex flex-col gap-4 text-sm">
+              <p>{enhancement.overview}</p>
+
               {enhancement.keyPoints.length > 0 && (
-                <div>
-                  <p className="text-sm font-medium mb-1">Key points</p>
-                  <ul className="list-disc pl-4 text-sm flex flex-col gap-1">
-                    {enhancement.keyPoints.map((point, i) => (
-                      <li key={i}>{point}</li>
+                <Section title="Key points">
+                  <ul className="list-disc pl-5">
+                    {enhancement.keyPoints.map((p, i) => <li key={i}>{p}</li>)}
+                  </ul>
+                </Section>
+              )}
+              {enhancement.decisions.length > 0 && (
+                <Section title="Decisions">
+                  <ul className="list-disc pl-5">
+                    {enhancement.decisions.map((d, i) => <li key={i}>{d}</li>)}
+                  </ul>
+                </Section>
+              )}
+              {enhancement.actionItems.length > 0 && (
+                <Section title="Action items">
+                  <ul className="flex flex-col gap-1">
+                    {enhancement.actionItems.map((a, i) => (
+                      <li key={i}>
+                        {a.owner && <span className="font-medium">{a.owner}: </span>}{a.text}
+                        {a.due && <span className="text-muted-foreground"> (due {a.due})</span>}
+                      </li>
                     ))}
                   </ul>
-                </div>
+                </Section>
+              )}
+              {enhancement.openQuestions.length > 0 && (
+                <Section title="Open questions">
+                  <ul className="list-disc pl-5">
+                    {enhancement.openQuestions.map((q, i) => <li key={i}>{q}</li>)}
+                  </ul>
+                </Section>
               )}
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">processing…</p>
+          )}
+          {transcription && (
+            <div className="mt-4 pt-4 border-t">
+              <RegenerateButton recordingId={id} />
+            </div>
           )}
         </CardContent>
       </Card>

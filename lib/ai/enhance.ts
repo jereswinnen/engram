@@ -10,14 +10,17 @@ export async function enhanceTranscript(
   const openai = createOpenAI({ apiKey: config.openAiApiKey() });
   const model = opts.model ?? config.llmModel();
   const system =
-    "Je bent een assistent die vergaderingen samenvat. Antwoord altijd in het Nederlands. " +
-    "De transcriptie is gediarizeerd (sprekers gelabeld); attribueer actiepunten aan de juiste spreker waar mogelijk." +
+    "You are an assistant that produces high-quality meeting notes. Always answer in English. " +
+    "The transcript is diarized (speakers labelled, names where known) with [mm:ss] timestamps. " +
+    "Attribute each action item to the responsible speaker by name when clear, capture explicit decisions, " +
+    "list the topics as chapters in order with an approximate startSeconds taken from the timestamps, " +
+    "and note any open questions." +
     (opts.glossaryBlock ? `\n\n${opts.glossaryBlock}` : "");
   const { object } = await generateObject({
     model: openai(model),
     schema: enhancementSchema,
     system,
-    prompt: `Transcriptie:\n\n${transcript}`,
+    prompt: `Transcript:\n\n${transcript}`,
   });
   return object;
 }

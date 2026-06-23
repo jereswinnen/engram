@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, timestamp, jsonb, boolean, index, customType } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, timestamp, jsonb, boolean, index, customType, unique } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
 const tsvector = customType<{ data: string }>({
@@ -137,9 +137,12 @@ export const aiEnhancements = pgTable("ai_enhancements", {
   recordingId: uuid("recording_id").notNull().references(() => recordings.id, { onDelete: "cascade" }),
   kind: text("kind").notNull().default("summary"),
   title: text("title"),
-  summary: text("summary").notNull(),
-  actionItems: jsonb("action_items").notNull().$type<string[]>(),
+  overview: text("overview").notNull(),
   keyPoints: jsonb("key_points").notNull().$type<string[]>(),
+  decisions: jsonb("decisions").notNull().$type<string[]>().default([]),
+  actionItems: jsonb("action_items").notNull().$type<{ text: string; owner?: string; due?: string }[]>(),
+  chapters: jsonb("chapters").notNull().$type<{ title: string; gist: string; startSeconds?: number }[]>().default([]),
+  openQuestions: jsonb("open_questions").notNull().$type<string[]>().default([]),
   model: text("model").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -193,3 +196,17 @@ export const backups = pgTable("backups", {
   error: text("error"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+export const speakers = pgTable("speakers", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull().unique(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const recordingSpeakers = pgTable("recording_speakers", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  recordingId: uuid("recording_id").notNull().references(() => recordings.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  speakerId: uuid("speaker_id").notNull().references(() => speakers.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [unique("recording_speakers_recording_label").on(t.recordingId, t.label)]);

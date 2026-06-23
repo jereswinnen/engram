@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import WaveSurfer from "wavesurfer.js";
 import { activeSegmentIndex } from "@/lib/transcript/active-segment";
 import { firstMatchingSegmentIndex } from "@/lib/search/match";
+import { nameForLabel } from "@/lib/transcript/speaker-names";
 
 type Segment = { start: number; end: number; text: string; speaker?: string | null };
 
@@ -13,7 +15,26 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export function TranscriptPlayer({ audioSrc, segments, highlightQuery }: { audioSrc: string; segments: Segment[]; highlightQuery?: string }) {
+type Chapter = { title: string; gist: string; startSeconds?: number };
+
+export function TranscriptPlayer({
+  audioSrc,
+  segments,
+  highlightQuery,
+  chapters,
+  speakerMap = {},
+  directory = [],
+  recordingId = "",
+}: {
+  audioSrc: string;
+  segments: Segment[];
+  highlightQuery?: string;
+  chapters?: Chapter[];
+  speakerMap?: Record<string, string>;
+  directory?: string[];
+  recordingId?: string;
+}) {
+  const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WaveSurfer | null>(null);
   const segmentRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -23,6 +44,14 @@ export function TranscriptPlayer({ audioSrc, segments, highlightQuery }: { audio
   const [duration, setDuration] = useState(0);
   const [active, setActive] = useState(-1);
   const [error, setError] = useState(false);
+  const [nameMap, setNameMap] = useState<Record<string, string>>(speakerMap);
+  // editingLabel: the diarized label currently being renamed (e.g. "SPEAKER_00")
+  const [editingLabel, setEditingLabel] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  // cancelledRef: true when Escape was pressed — tells onBlur to skip the submit
+  const cancelledRef = useRef(false);
+  // submittingRef: true while submitRename is running — prevents double-PUT (Enter then blur)
+  const submittingRef = useRef(false);
 
   // Sync segmentsRef with the latest segments prop.
   useEffect(() => {
@@ -82,6 +111,35 @@ export function TranscriptPlayer({ audioSrc, segments, highlightQuery }: { audio
     }
   }, [active]);
 
+  async function submitRename(label: string, name: string) {
+    // Fix 2: guard against double-fire (Enter → onSubmit → setEditingLabel(null) → onBlur)
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setEditingLabel(null);
+    try {
+      const trimmed = name.trim();
+      const res = await fetch(`/api/recordings/${recordingId}/speakers`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label, name: trimmed }),
+      });
+      // Fix 3: only apply optimistic update when the server accepted the change
+      if (!res.ok) return;
+      if (trimmed) {
+        setNameMap((m) => ({ ...m, [label]: trimmed }));
+      } else {
+        setNameMap((m) => {
+          const next = { ...m };
+          delete next[label];
+          return next;
+        });
+      }
+      router.refresh();
+    } finally {
+      submittingRef.current = false;
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
@@ -99,25 +157,106 @@ export function TranscriptPlayer({ audioSrc, segments, highlightQuery }: { audio
       <div ref={containerRef} className="w-full" />
       {error && <p className="text-sm text-destructive">Audio unavailable.</p>}
 
-      {segments.length > 0 && (
-        <div className="mt-2 flex max-h-96 flex-col gap-1 overflow-y-auto text-sm font-mono">
-          {segments.map((seg, i) => (
-            <button
-              type="button"
-              key={i}
-              ref={(el) => {
-                segmentRefs.current[i] = el;
-              }}
-              onClick={() => wsRef.current?.setTime(seg.start)}
-              className={`cursor-pointer rounded px-1 text-left ${i === active ? "bg-muted" : ""}`}
-            >
-              <span className="text-muted-foreground text-xs">{formatTime(seg.start)}</span>{" "}
-              <span className="font-medium">Speaker {seg.speaker ?? "?"}</span>
-              {": "}
-              {seg.text}
-            </button>
-          ))}
+      {chapters && chapters.length > 0 && (
+        <div className="flex flex-col gap-1 text-sm">
+          <h3 className="font-medium">Chapters</h3>
+          {chapters.map((c, i) => {
+            const seekable = c.startSeconds != null && c.startSeconds >= 0 && (duration === 0 || c.startSeconds <= duration);
+            return (
+              <button key={i} type="button" disabled={!seekable}
+                onClick={() => { if (seekable) wsRef.current?.setTime(c.startSeconds!); }}
+                className="text-left disabled:opacity-60">
+                {c.startSeconds != null && <span className="text-muted-foreground text-xs tabular-nums">{formatTime(c.startSeconds)} </span>}
+                <span className="font-medium">{c.title}</span> — <span className="text-muted-foreground">{c.gist}</span>
+              </button>
+            );
+          })}
         </div>
+      )}
+
+      {segments.length > 0 && (
+        <>
+          {directory.length > 0 && (
+            <datalist id="speaker-directory">
+              {directory.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+          )}
+          <div className="mt-2 flex max-h-96 flex-col gap-1 overflow-y-auto text-sm font-mono">
+            {segments.map((seg, i) => {
+              const label = seg.speaker ?? "";
+              const displayName = nameForLabel(label || "Speaker ?", nameMap);
+              const isEditing = editingLabel === label && label !== "";
+              return (
+                <div
+                  key={i}
+                  className={`flex items-baseline gap-1 rounded px-1 ${i === active ? "bg-muted" : ""}`}
+                >
+                  <button
+                    type="button"
+                    ref={(el) => {
+                      segmentRefs.current[i] = el;
+                    }}
+                    onClick={() => wsRef.current?.setTime(seg.start)}
+                    className="cursor-pointer text-left shrink-0"
+                  >
+                    <span className="text-muted-foreground text-xs">{formatTime(seg.start)}</span>
+                  </button>
+                  {" "}
+                  {isEditing ? (
+                    <form
+                      className="inline-flex items-center gap-1"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void submitRename(label, editValue);
+                      }}
+                    >
+                      <input
+                        autoFocus
+                        list="speaker-directory"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onBlur={() => {
+                          // Fix 1: Escape sets cancelledRef so the blur triggered by
+                          // unmounting the input doesn't also fire a submit
+                          if (cancelledRef.current) { cancelledRef.current = false; return; }
+                          void submitRename(label, editValue);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") {
+                            // Fix 1: mark as cancelled before setEditingLabel so the
+                            // ensuing onBlur (from unmount) knows not to submit
+                            cancelledRef.current = true;
+                            setEditingLabel(null);
+                          }
+                        }}
+                        placeholder={displayName}
+                        className="rounded border px-1 text-xs font-medium w-28"
+                      />
+                    </form>
+                  ) : (
+                    <button
+                      type="button"
+                      title="Click to rename speaker"
+                      onClick={() => {
+                        if (label) {
+                          setEditingLabel(label);
+                          setEditValue(nameMap[label] ?? "");
+                        }
+                      }}
+                      className="font-medium hover:underline decoration-dotted cursor-pointer shrink-0"
+                    >
+                      {displayName}
+                    </button>
+                  )}
+                  {": "}
+                  <span className="break-words">{seg.text}</span>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

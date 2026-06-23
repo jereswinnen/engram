@@ -43,6 +43,20 @@
       "when": 1782210782178,
       "tag": "0005_wealthy_bushwacker",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1750636800000,
+      "tag": "0006_ai_enhancements_reshape",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782237883311,
+      "tag": "0007_condemned_trauma",
+      "breakpoints": true
     }
   ]
 }

@@ -109,10 +109,24 @@ Implementation:
 - [x] **Settings UI** — add/edit/delete terms with comma-separated aliases
 - [x] **Cost note + docs** — DEPLOY.md updated with glossary section; cost impact documented
 
+#### Phase 2 — Rich AI enhancement + speaker naming (COMPLETE)
+
+Full spec: [Phase 2 AI Enhancement + Speaker Naming Design](docs/superpowers/specs/2026-06-23-engram-ai-enhancement-speakers-design.md)
+
+- [x] **Rich enhancement schema** — `overview`, `keyPoints`, `decisions`, `actionItems[{text,owner?,due?}]`, `chapters[{title,gist,startSeconds?}]`, `openQuestions` — drizzle schema + migration + LLM prompt
+- [x] **Speaker naming utilities** — `nameForLabel` + `buildNamedTranscript` in `lib/transcript/speaker-names`
+- [x] **Enhancement reshape migration** — `summary` → `overview`, structured `actionItems`; back-fills existing rows
+- [x] **Rich enhancement pipeline** — LLM produces full rich schema; render all sections in recording detail UI
+- [x] **Chapter-to-seek** — clicking a chapter card in the UI seeks the player to `startSeconds`
+- [x] **Speakers directory + per-recording speaker map** — `speakers` + `recordingSpeakers` tables; `getRecordingSpeakerMap` / `setRecordingSpeaker` in `lib/speakers/store`
+- [x] **Manual speaker rename UI** — inline editable speaker labels in transcript; non-destructive (segments untouched, read-time substitution); directory autocomplete
+- [x] **Names into enhancement + Regenerate** — `buildNamedTranscript` feeds the LLM so names appear in the summary; manual "Regenerate" button; hint when map is empty
+- [x] **Exports + speaker names** — Markdown export: `## Decisions`, `## Chapters` (title + gist + `[mm:ss]`), `## Open questions`; JSON export: `decisions`/`chapters`/`openQuestions` in enhancement object; both resolve transcript speaker labels via `speakerMap` + `nameForLabel`; callers (`export/route.ts`, `backup/build.ts`) load `getRecordingSpeakerMap` and pass the map
+
 #### Phase 2 — Remaining slices (PENDING)
 
-- [ ] **Speaker naming + cross-recording speaker ID** — identify speakers by name across multiple recordings
 - [ ] **Multi-view summaries + templates** — multiple views per recording; template library for custom summaries
+- [ ] **Mind maps** — visual graph of concepts and relationships extracted from the recording
 - [ ] **Ask-Engram (RAG)** — chunk → embed → pgvector → retrieve → answer with word-timestamp citations
 - [ ] Native iOS client (SwiftUI/SwiftData) against Engram's REST API
 

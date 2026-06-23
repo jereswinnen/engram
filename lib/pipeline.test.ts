@@ -12,7 +12,11 @@ vi.mock("@/db", () => ({
       glossary: { findMany: async () => { if (glossaryFails) throw new Error("DB gone"); return []; } },
     },
     insert: () => ({ values: async () => {} }),
+    delete: () => ({ where: async () => {} }),
   },
+}));
+vi.mock("@/lib/speakers/store", () => ({
+  getRecordingSpeakerMap: vi.fn(async () => ({})),
 }));
 vi.mock("@/lib/storage", () => ({
   getStorage: () => ({ presignedGetUrl: async () => "https://signed" }),

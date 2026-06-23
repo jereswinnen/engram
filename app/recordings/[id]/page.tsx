@@ -10,6 +10,7 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import RetryButton from "./retry-button";
+import RegenerateButton from "./regenerate-button";
 import { requireSession } from "@/lib/auth-guard";
 import { TranscriptPlayer } from "./transcript-player";
 import { ExportButtons } from "./export-buttons";
@@ -142,6 +143,11 @@ export default async function RecordingPage({
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">processing…</p>
+          )}
+          {transcription && (
+            <div className="mt-4 pt-4 border-t">
+              <RegenerateButton recordingId={id} />
+            </div>
           )}
         </CardContent>
       </Card>

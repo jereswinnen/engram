@@ -7,6 +7,7 @@ vi.mock("@/db", () => ({
     query: {
       recordings: { findFirst: async () => ({ id: "r1", storageKey: "audio/r1.mp3" }) },
       transcriptions: { findFirst: async () => ({ recordingId: "r1", fullText: "hoi" }) },
+      glossary: { findMany: async () => [] },
     },
     insert: () => ({ values: async () => {} }),
   },

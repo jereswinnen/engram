@@ -64,6 +64,13 @@
       "when": 1782242801410,
       "tag": "0008_reshape_ai_enhancements_idempotent",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1782245448574,
+      "tag": "0009_brave_nightcrawler",
+      "breakpoints": true
     }
   ]
 }

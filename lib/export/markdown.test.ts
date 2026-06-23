@@ -8,7 +8,7 @@ describe("recordingToMarkdown", () => {
     const md = recordingToMarkdown(
       rec,
       { language: "nld", fullText: "x", segments: [{ start: 5, end: 7, text: "Hallo", speaker: "A" }] },
-      { title: "Wekelijkse sync", summary: "Samenvatting.", actionItems: ["Jan: offerte"], keyPoints: ["Deadline"] },
+      { title: "Wekelijkse sync", overview: "Samenvatting.", actionItems: [{ text: "Jan: offerte" }], keyPoints: ["Deadline"] },
     );
     expect(md).toContain("# Weekly Sync");
     expect(md).toContain("## Summary");
@@ -24,7 +24,7 @@ describe("recordingToMarkdown", () => {
     expect(md).toContain("No transcript yet");
   });
   it("omits empty action items / key points sections", () => {
-    const md = recordingToMarkdown(rec, null, { title: null, summary: "S", actionItems: [], keyPoints: [] });
+    const md = recordingToMarkdown(rec, null, { title: null, overview: "S", actionItems: [], keyPoints: [] });
     expect(md).not.toContain("## Action items");
     expect(md).not.toContain("## Key points");
   });

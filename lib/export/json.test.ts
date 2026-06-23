@@ -8,11 +8,11 @@ describe("recordingToExport", () => {
     const out = recordingToExport(
       rec,
       { language: "nld", fullText: "hoi", segments: [{ start: 0, end: 1, text: "hoi" }] },
-      { title: "T", summary: "S", actionItems: ["a"], keyPoints: ["k"] },
+      { title: "T", overview: "S", actionItems: [{ text: "a" }], keyPoints: ["k"] },
     );
     expect(out).toMatchObject({ id: "r1", title: "Sync", source: "plaud", durationSeconds: 65 });
     expect(out.transcript).toMatchObject({ language: "nld", fullText: "hoi" });
-    expect(out.enhancement).toMatchObject({ summary: "S" });
+    expect(out.enhancement).toMatchObject({ overview: "S" });
   });
   it("nulls transcript/enhancement when absent", () => {
     const out = recordingToExport(rec, null, null);

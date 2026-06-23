@@ -1,6 +1,6 @@
 interface Rec { id: string; title: string; source: string; createdAt: Date; durationSeconds: number | null; status: string }
 interface Tr { language: string | null; fullText: string; segments: { start: number; end: number; text: string; speaker?: string }[] }
-interface Enh { title: string | null; summary: string; actionItems: string[]; keyPoints: string[] }
+interface Enh { title: string | null; overview: string; actionItems: { text: string; owner?: string; due?: string }[]; keyPoints: string[] }
 
 function mmss(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -15,9 +15,9 @@ export function recordingToMarkdown(rec: Rec, tr: Tr | null, enh: Enh | null): s
   lines.push(`_${rec.createdAt.toISOString().slice(0, 10)} · source: ${rec.source}${dur}_`, "");
 
   lines.push("## Summary", "");
-  lines.push(enh ? enh.summary : "_Not yet processed_", "");
+  lines.push(enh ? enh.overview : "_Not yet processed_", "");
   if (enh && enh.actionItems.length > 0) {
-    lines.push("## Action items", "", ...enh.actionItems.map((i) => `- ${i}`), "");
+    lines.push("## Action items", "", ...enh.actionItems.map((i) => `- ${i.text}${i.owner ? ` (${i.owner})` : ""}${i.due ? ` — due ${i.due}` : ""}`), "");
   }
   if (enh && enh.keyPoints.length > 0) {
     lines.push("## Key points", "", ...enh.keyPoints.map((p) => `- ${p}`), "");

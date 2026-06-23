@@ -10,9 +10,9 @@ describe("schema", () => {
   it("transcriptions references recordings", () => {
     expect(transcriptions.recordingId).toBeDefined();
   });
-  it("aiEnhancements has summary fields", () => {
+  it("aiEnhancements has expected fields", () => {
     expect(Object.keys(aiEnhancements)).toEqual(
-      expect.arrayContaining(["summary", "actionItems", "keyPoints", "model"]),
+      expect.arrayContaining(["overview", "actionItems", "keyPoints", "decisions", "chapters", "openQuestions", "model"]),
     );
   });
 });

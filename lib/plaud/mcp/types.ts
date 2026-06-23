@@ -7,7 +7,10 @@ export interface PlaudFile {
 }
 
 export interface PlaudFileDetail extends PlaudFile {
-  presignedUrl: string; // signed, ~24h
+  // Signed audio URL (~24h). null when Plaud has the recording/transcript but
+  // hasn't finished making the audio downloadable yet (e.g. a fresh recording
+  // still processing) — the sync defers these and retries on the next run.
+  presignedUrl: string | null;
 }
 
 /** MCP tool results are { content: [{ type:"text", text }, …] }. */
@@ -42,7 +45,9 @@ export function mapFile(raw: any): PlaudFile {
 }
 
 export function mapFileDetail(raw: any): PlaudFileDetail {
-  const presignedUrl = raw.presigned_url ?? raw.url ?? raw.audio_url;
-  if (!presignedUrl) throw new Error(`mapFileDetail: no presigned_url in ${JSON.stringify(raw)}`);
+  // null (not a throw) when the audio isn't downloadable yet — the sync defers
+  // these so a freshly-recorded file (transcript ready, audio still processing)
+  // is retried next run instead of surfacing as a hard failure.
+  const presignedUrl = raw.presigned_url ?? raw.url ?? raw.audio_url ?? null;
   return { ...mapFile(raw), presignedUrl };
 }

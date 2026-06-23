@@ -19,6 +19,7 @@ export function TranscriptPlayer({ audioSrc, segments }: { audioSrc: string; seg
   const segmentsRef = useRef(segments);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const [active, setActive] = useState(-1);
   const [error, setError] = useState(false);
 
@@ -53,6 +54,7 @@ export function TranscriptPlayer({ audioSrc, segments }: { audioSrc: string; seg
       setActive(activeSegmentIndex(segmentsRef.current, t));
     };
     ws.on("timeupdate", onTime);
+    ws.on("ready", () => setDuration(ws.getDuration()));
     ws.on("play", () => setPlaying(true));
     ws.on("pause", () => setPlaying(false));
     ws.on("error", () => setError(true));
@@ -81,7 +83,7 @@ export function TranscriptPlayer({ audioSrc, segments }: { audioSrc: string; seg
         >
           {playing ? "Pause" : "Play"}
         </button>
-        <span className="text-xs text-muted-foreground tabular-nums">{formatTime(currentTime)}</span>
+        <span className="text-xs text-muted-foreground tabular-nums">{formatTime(currentTime)} / {formatTime(duration)}</span>
       </div>
 
       <div ref={containerRef} className="w-full" />

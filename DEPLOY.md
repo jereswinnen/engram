@@ -245,6 +245,26 @@ a real recording:
 
 ---
 
+## Scheduled sync (Railway cron service)
+
+New recordings (and their transcription + AI enhancement) are picked up
+automatically by an hourly cron service that calls `POST /api/sync`.
+
+One-time setup:
+1. Generate a strong random secret and set `CRON_SECRET` on the **web** service.
+2. In the same Railway project, **New → Service → from the same GitHub repo**.
+3. On that service: **Settings → Cron Schedule = `0 * * * *`**;
+   **Start Command = `node scripts/sync-cron.mjs`**.
+4. Set its env vars: `CRON_SECRET` (same value as the web service) and
+   `APP_URL` = the web app's public URL (e.g. `https://engram-production.up.railway.app`).
+5. Save. Railway runs it hourly; it POSTs `/api/sync` then exits. Run history
+   and logs appear on that service; the sync outcome also shows in Settings.
+
+A run that overlaps an in-progress sync is skipped (the `runningSince` guard);
+a crashed run self-heals after 30 minutes.
+
+---
+
 ## Phase 2 — Glossary
 
 The Glossary feature allows you to define domain-specific terminology and aliases

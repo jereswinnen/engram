@@ -72,6 +72,22 @@ network. Full design + plan in
       device; verify Desktop app → cloud → Engram → enhanced summary flow. (Out of scope for
       Phase 1, deferred to Phase 2 device story.)
 
+#### Scheduled sync — hourly Railway cron service (COMPLETE)
+
+Automated sync runs every hour via a Railway cron service hitting `POST /api/sync` with
+the `CRON_SECRET` bearer token. A concurrency guard (`runningSince` timestamp) prevents
+overlapping runs from double-importing recordings; a crashed run self-heals after 30 minutes.
+
+Full design and implementation: [Engram Scheduled Sync Design](docs/superpowers/specs/2026-06-23-engram-scheduled-sync-design.md)
+
+Implementation:
+- [x] **Concurrency guard** — `syncState.runningSince` timestamp; skip if recent, set at start, clear in `finally`; 30-min TTL self-heals crashes. (`lib/plaud/sync.ts`)
+- [x] **Migration** — `runningSince` column added to `syncState` table.
+- [x] **Cron script** — `scripts/sync-cron.mjs` (Node ESM, no deps); reads `APP_URL` and `CRON_SECRET` from env; POSTs `/api/sync` with bearer; exits non-zero on error (Railway marks failed runs).
+- [x] **Railway cron setup docs** — step-by-step in `DEPLOY.md`; operator performs once.
+
+**One-time operator setup:** See `DEPLOY.md` section "Scheduled sync (Railway cron service)" for exact steps. Requires generating `CRON_SECRET`, creating a new Railway cron service from the same repo, setting the schedule to `0 * * * *`, and configuring env vars (`CRON_SECRET` + `APP_URL`).
+
 ### Phase 1+ — deferred UX features
 
 - [x] **Waveform player (Wavesurfer.js) + click-to-seek** (COMPLETE)

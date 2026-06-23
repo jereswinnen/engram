@@ -54,14 +54,14 @@ describe("recordingToExport", () => {
     expect(out.transcript?.segments[1].speaker).toBe("Bob");
   });
 
-  it("falls back to raw label when speaker not in speakerMap", () => {
+  it("prettifies unmapped speaker label when not in speakerMap", () => {
     const out = recordingToExport(
       rec,
       { language: "nld", fullText: "hoi", segments: [{ start: 0, end: 1, text: "hoi", speaker: "C" }] },
       null,
       { A: "Alice" },
     );
-    expect(out.transcript?.segments[0].speaker).toBe("C");
+    expect(out.transcript?.segments[0].speaker).toBe("Speaker C");
   });
 
   it("leaves speaker undefined when segment has no speaker", () => {

@@ -29,7 +29,7 @@ describe("recordingToMarkdown", () => {
     expect(md).toContain("Samenvatting.");
     expect(md).toContain("- Jan: offerte");
     expect(md).toContain("## Transcript");
-    expect(md).toContain("**A** [0:05]: Hallo");
+    expect(md).toContain("**Speaker A** [0:05]: Hallo");
   });
 
   it("handles missing transcription and enhancement", () => {
@@ -102,14 +102,14 @@ describe("recordingToMarkdown", () => {
     expect(md).toContain("**Bob** [0:08]: Dag");
   });
 
-  it("falls back to raw label when speaker not in speakerMap", () => {
+  it("prettifies unmapped speaker label when not in speakerMap", () => {
     const md = recordingToMarkdown(
       rec,
       { language: "nld", fullText: "x", segments: [{ start: 5, end: 7, text: "Hallo", speaker: "C" }] },
       null,
       { A: "Alice" },
     );
-    expect(md).toContain("**C** [0:05]: Hallo");
+    expect(md).toContain("**Speaker C** [0:05]: Hallo");
   });
 
   it("uses 'Speaker ?' when speaker label is absent and no map", () => {

@@ -79,7 +79,7 @@ export async function syncPlaud(): Promise<SyncResult> {
 
     const checkpointMs = row.lastSyncedAt ? new Date(row.lastSyncedAt).getTime() : 0;
 
-    let client;
+    let client: Awaited<ReturnType<typeof connect>>;
     try {
       client = await connect();
     } catch (e) {
@@ -118,13 +118,13 @@ export async function syncPlaud(): Promise<SyncResult> {
     let maxSuccessMs = checkpointMs;
     let earliestFailureMs = Infinity;
     let earliestDeferredMs = Infinity;
+    let earliestUnprocessedMs = Infinity; // left for next run because the time budget ran out
     let firstItemError: string | undefined;
 
-    for (const r of candidates) {
-      // Heartbeat the lock: a long run (each item is download + transcribe + enhance)
-      // keeps the lock fresh so it isn't mistaken for a crashed run, and so a crash
-      // leaves a lock only as stale as the last item — recovered within STALE_LOCK_MS.
-      await db.update(syncState).set({ runningSince: new Date() }).where(eq(syncState.id, row.id));
+    // Process one candidate end-to-end: download → store → transcribe → enhance.
+    // Mutates the shared counters above; safe under the worker pool because each
+    // statement runs to completion on JS's single thread (no torn updates).
+    async function processOne(r: PlaudFile) {
       let insertedId: string | undefined;
       try {
         const detail = await getFile(client, r.fileId);
@@ -135,7 +135,7 @@ export async function syncPlaud(): Promise<SyncResult> {
           deferredCount++;
           earliestDeferredMs = Math.min(earliestDeferredMs, r.startAtMs);
           console.info("[plaud sync] deferring (audio not ready)", r.fileId);
-          continue;
+          return;
         }
         const { bytes, contentType } = await downloadAudio(detail.presignedUrl);
         const [rec] = await db
@@ -187,9 +187,40 @@ export async function syncPlaud(): Promise<SyncResult> {
       }
     }
 
-    // Don't advance the checkpoint past the earliest blocker (a real failure OR a
-    // deferred audio-not-ready item), so both are retried on the next sync.
-    const earliestBlockerMs = Math.min(earliestFailureMs, earliestDeferredMs);
+    // Drain the queue with a bounded worker pool so a backlog finishes in minutes
+    // instead of serializing into an hour-plus run that gets killed before it can
+    // write its checkpoint. A wall-clock budget stops starting new items well before
+    // any platform kill window; whatever's left — the oldest items, since we go
+    // newest-first — is recorded as a blocker so the checkpoint stays before it and
+    // the next run resumes there. Tune via PLAUD_SYNC_CONCURRENCY / PLAUD_SYNC_BUDGET_MS
+    // (lower the concurrency if Plaud/transcription rate-limits).
+    const CONCURRENCY = Math.max(1, Number(process.env.PLAUD_SYNC_CONCURRENCY) || 5);
+    const BUDGET_MS = Number(process.env.PLAUD_SYNC_BUDGET_MS) || 25 * 60 * 1000;
+    const startedAt = Date.now();
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < candidates.length) {
+        const r = candidates[cursor++];
+        if (Date.now() - startedAt > BUDGET_MS) {
+          earliestUnprocessedMs = Math.min(earliestUnprocessedMs, r.startAtMs);
+          continue; // out of time — leave it (and the rest) for the next run
+        }
+        // Heartbeat the lock so a live run isn't mistaken for a crashed one, and a
+        // crash leaves a lock only as stale as the last item (recovered within STALE_LOCK_MS).
+        await db.update(syncState).set({ runningSince: new Date() }).where(eq(syncState.id, row.id));
+        await processOne(r);
+      }
+    };
+    await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
+    if (earliestUnprocessedMs !== Infinity) {
+      const left = candidates.length - newCount - failedCount - deferredCount;
+      console.warn(`[plaud sync] time budget (${Math.round(BUDGET_MS / 60000)}m) hit — ${left} item(s) deferred to next run`);
+    }
+
+    // Don't advance the checkpoint past the earliest blocker (a real failure, a
+    // deferred audio-not-ready item, or an item left unprocessed by the time budget),
+    // so each is retried on the next sync.
+    const earliestBlockerMs = Math.min(earliestFailureMs, earliestDeferredMs, earliestUnprocessedMs);
     const newCheckpointMs =
       earliestBlockerMs === Infinity ? maxSuccessMs : Math.max(checkpointMs, earliestBlockerMs - 1);
     const result: SyncResult = {

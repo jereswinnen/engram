@@ -26,7 +26,11 @@ export function selectNewRecordings(
     .filter((r) => !r.trashed)
     .filter((r) => r.startAtMs > checkpointMs)
     .filter((r) => !existingFileIds.has(r.fileId))
-    .sort((a, b) => a.startAtMs - b.startAtMs);
+    // Newest-first: a slow or interrupted run must import the latest recordings
+    // before grinding through an older backlog, otherwise fresh recordings sit at
+    // the back of the queue and never get reached. The end-of-run checkpoint math
+    // is order-independent (min/max over outcomes), so processing order is free.
+    .sort((a, b) => b.startAtMs - a.startAtMs);
 }
 
 function extFromContentType(ct: string): string {
@@ -102,6 +106,10 @@ export async function syncPlaud(): Promise<SyncResult> {
 
     const candidates = selectNewRecordings(all, checkpointMs, existingFileIds);
     const skippedCount = all.length - candidates.length;
+    console.info(
+      `[plaud sync] start: ${all.length} listed, ${existingFileIds.size} already imported, ` +
+        `${candidates.length} to process, checkpoint=${checkpointMs ? new Date(checkpointMs).toISOString() : "none"}`,
+    );
 
     let newCount = 0;
     let failedCount = 0;
@@ -192,6 +200,11 @@ export async function syncPlaud(): Promise<SyncResult> {
       ...(failedCount > 0 && firstItemError ? { error: `first failure: ${firstItemError}` } : {}),
     };
     await db.update(syncState).set({ lastSyncedAt: new Date(newCheckpointMs), lastResult: result }).where(eq(syncState.id, row.id));
+    console.info(
+      `[plaud sync] done: ${newCount} new, ${failedCount} failed, ${deferredCount} deferred, ` +
+        `${processingErrorCount} processing errors; checkpoint ${checkpointMs === newCheckpointMs ? "held" : "advanced"} ` +
+        `to ${new Date(newCheckpointMs).toISOString()}`,
+    );
     return result;
     } finally {
       await client.close();

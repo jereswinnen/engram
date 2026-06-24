@@ -6,7 +6,7 @@ function rec(p: Partial<PlaudFile> & { fileId: string; startAtMs: number }): Pla
 }
 
 describe("selectNewRecordings", () => {
-  it("keeps untrashed, newer-than-checkpoint, not-already-present, sorted ascending", async () => {
+  it("keeps untrashed, newer-than-checkpoint, not-already-present, sorted newest-first", async () => {
     const { selectNewRecordings } = await import("./sync");
     const all = [
       rec({ fileId: "old", startAtMs: 100 }),
@@ -16,7 +16,7 @@ describe("selectNewRecordings", () => {
       rec({ fileId: "a", startAtMs: 250 }),
     ];
     const out = selectNewRecordings(all, 200, new Set(["dup"]));
-    expect(out.map((r) => r.fileId)).toEqual(["a", "b"]);
+    expect(out.map((r) => r.fileId)).toEqual(["b", "a"]);
   });
 });
 

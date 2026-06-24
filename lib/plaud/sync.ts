@@ -12,6 +12,7 @@ export interface SyncResult {
   skippedCount: number;
   failedCount: number;
   deferredCount: number; // audio not downloadable from Plaud yet — retried next sync
+  processingErrorCount: number; // imported, but transcription/enhancement failed (status "error")
   note?: string; // set only when a run is skipped (e.g. already running)
   error?: string;
 }
@@ -45,15 +46,23 @@ async function getSyncRow() {
 
 export async function syncPlaud(): Promise<SyncResult> {
   const ranAt = new Date().toISOString();
-  const base: SyncResult = { ranAt, newCount: 0, skippedCount: 0, failedCount: 0, deferredCount: 0 };
+  const base: SyncResult = { ranAt, newCount: 0, skippedCount: 0, failedCount: 0, deferredCount: 0, processingErrorCount: 0 };
 
   const row = await getSyncRow();
 
   // Concurrency guard: don't let a scheduled run overlap a manual/previous one
-  // (which would double-import + double-pay). Self-heals after the TTL if a run crashed.
-  const LOCK_TTL_MS = 30 * 60 * 1000;
-  if (row.runningSince && Date.now() - new Date(row.runningSince).getTime() < LOCK_TTL_MS) {
-    return { ...base, note: "skipped — a sync is already running" };
+  // (which would double-import + double-pay). A live run heartbeats `runningSince`
+  // before every item (see loop below), so a lock older than the stale window means
+  // the owner crashed/was killed mid-run — we take over instead of waiting the full
+  // hour+ a long run could occupy. The window must comfortably exceed the slowest
+  // single item (download + transcribe + enhance).
+  const STALE_LOCK_MS = 10 * 60 * 1000;
+  if (row.runningSince && Date.now() - new Date(row.runningSince).getTime() < STALE_LOCK_MS) {
+    // Record the skip so the UI's "last sync" reflects that an attempt happened
+    // (the run that owns the lock will overwrite this with its real result when it finishes).
+    const result = { ...base, note: "skipped — a sync is already running" };
+    await writeResult(row.id, result);
+    return result;
   }
   await db.update(syncState).set({ runningSince: new Date() }).where(eq(syncState.id, row.id));
 
@@ -97,12 +106,17 @@ export async function syncPlaud(): Promise<SyncResult> {
     let newCount = 0;
     let failedCount = 0;
     let deferredCount = 0;
+    let processingErrorCount = 0;
     let maxSuccessMs = checkpointMs;
     let earliestFailureMs = Infinity;
     let earliestDeferredMs = Infinity;
     let firstItemError: string | undefined;
 
     for (const r of candidates) {
+      // Heartbeat the lock: a long run (each item is download + transcribe + enhance)
+      // keeps the lock fresh so it isn't mistaken for a crashed run, and so a crash
+      // leaves a lock only as stale as the last item — recovered within STALE_LOCK_MS.
+      await db.update(syncState).set({ runningSince: new Date() }).where(eq(syncState.id, row.id));
       let insertedId: string | undefined;
       try {
         const detail = await getFile(client, r.fileId);
@@ -133,8 +147,23 @@ export async function syncPlaud(): Promise<SyncResult> {
         await db.update(recordings).set({ storageKey: key }).where(eq(recordings.id, rec.id));
 
         await runTranscription(rec.id);
-        const stored = await db.query.recordings.findFirst({ where: eq(recordings.id, rec.id) });
-        if (stored?.status === "transcribed") await runEnhancement(rec.id);
+        let stored = await db.query.recordings.findFirst({ where: eq(recordings.id, rec.id) });
+        if (stored?.status === "transcribed") {
+          await runEnhancement(rec.id);
+          stored = await db.query.recordings.findFirst({ where: eq(recordings.id, rec.id) });
+        }
+        // The pipeline swallows its own errors and parks the recording in "error" status
+        // rather than throwing. Surface that here so a failed transcription/enhancement is
+        // visible in the sync result instead of silently counting as a clean import. We do
+        // NOT treat it as a checkpoint blocker: the recording is already imported (deduped
+        // next run), so re-listing it would never reprocess it — it needs a per-recording
+        // retry, not a re-sync.
+        if (stored?.status === "error") {
+          processingErrorCount++;
+          const msg = stored.errorMessage ?? "transcription/enhancement failed";
+          if (firstItemError === undefined) firstItemError = msg;
+          console.warn("[plaud sync] processing error", r.fileId, msg);
+        }
 
         newCount++;
         if (r.startAtMs > maxSuccessMs) maxSuccessMs = r.startAtMs;
@@ -156,8 +185,10 @@ export async function syncPlaud(): Promise<SyncResult> {
     const newCheckpointMs =
       earliestBlockerMs === Infinity ? maxSuccessMs : Math.max(checkpointMs, earliestBlockerMs - 1);
     const result: SyncResult = {
-      ranAt, newCount, skippedCount, failedCount, deferredCount,
-      // Only a genuine failure is an error; deferred items are normal (surfaced in the count).
+      ranAt, newCount, skippedCount, failedCount, deferredCount, processingErrorCount,
+      // Only a genuine import failure is a top-level error (it blocks the checkpoint and reds
+      // the cron). Deferred items and processing errors are normal/recoverable — surfaced via
+      // their counts, not as an error.
       ...(failedCount > 0 && firstItemError ? { error: `first failure: ${firstItemError}` } : {}),
     };
     await db.update(syncState).set({ lastSyncedAt: new Date(newCheckpointMs), lastResult: result }).where(eq(syncState.id, row.id));

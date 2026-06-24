@@ -3,11 +3,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
-type LastResult = { ranAt: string; newCount: number; skippedCount: number; failedCount: number; deferredCount?: number; error?: string } | null;
+type LastResult = { ranAt: string; newCount: number; skippedCount: number; failedCount: number; deferredCount?: number; processingErrorCount?: number; note?: string; error?: string } | null;
 
-function summarize(r: { newCount: number; skippedCount: number; failedCount: number; deferredCount?: number }): string {
+function summarize(r: { newCount: number; skippedCount: number; failedCount: number; deferredCount?: number; processingErrorCount?: number }): string {
   const parts = [`${r.newCount} new`, `${r.skippedCount} skipped`, `${r.failedCount} failed`];
   if (r.deferredCount) parts.push(`${r.deferredCount} waiting for audio`);
+  if (r.processingErrorCount) parts.push(`${r.processingErrorCount} processing errors`);
   return parts.join(", ");
 }
 
@@ -37,7 +38,7 @@ export function PlaudSettings({ connected, lastResult, oauthStatus }: { connecte
       const res = await fetch("/api/sync", { method: "POST" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "sync failed");
-      setStatus(json.error ? `Sync: ${json.error}` : `Sync complete — ${summarize(json)}.`);
+      setStatus(json.note ? `Sync: ${json.note}` : json.error ? `Sync: ${json.error}` : `Sync complete — ${summarize(json)}.`);
       router.refresh();
     } catch (e) { setStatus((e as Error).message); } finally { setBusy(false); }
   }
@@ -58,7 +59,7 @@ export function PlaudSettings({ connected, lastResult, oauthStatus }: { connecte
         <Button onClick={syncNow} disabled={busy || !connected}>Sync now</Button>
         {lastResult && (
           <p className="text-sm text-muted-foreground">
-            Last sync: {new Date(lastResult.ranAt).toLocaleString("en-GB")} — {lastResult.error ?? summarize(lastResult)}
+            Last sync: {new Date(lastResult.ranAt).toLocaleString("en-GB")} — {lastResult.note ?? lastResult.error ?? summarize(lastResult)}
           </p>
         )}
       </div>

@@ -217,4 +217,32 @@ describe("syncPlaud", () => {
     await syncPlaud();
     expect(lastWriteWith("runningSince").runningSince).toBeNull(); // lock acquired then cleared
   });
+
+  it("processes the whole batch concurrently and advances the checkpoint to the newest", async () => {
+    calls.files = Array.from({ length: 12 }, (_, i) => ({ fileId: `f${i}`, name: `R${i}`, startAtMs: (i + 1) * 1000, trashed: false }));
+    const { syncPlaud } = await import("./sync");
+    const result = await syncPlaud();
+    expect(result.newCount).toBe(12);
+    expect(result.failedCount).toBe(0);
+    expect(calls.transcribed).toHaveLength(12);
+    expect(new Date(lastWriteWith("lastSyncedAt").lastSyncedAt).getTime()).toBe(12000); // newest
+  });
+
+  it("stops at the time budget and holds the checkpoint before the unprocessed (oldest) items", async () => {
+    process.env.PLAUD_SYNC_BUDGET_MS = "-1"; // already over budget on the first check
+    try {
+      calls.files = [
+        { fileId: "f1", name: "One", startAtMs: 1000, trashed: false },
+        { fileId: "f2", name: "Two", startAtMs: 2000, trashed: false },
+      ];
+      const { syncPlaud } = await import("./sync");
+      const result = await syncPlaud();
+      expect(result.newCount).toBe(0); // budget gone before any item ran
+      expect(calls.transcribed).toHaveLength(0);
+      // checkpoint must stay before the oldest unprocessed item (1000) → 999
+      expect(new Date(lastWriteWith("lastSyncedAt").lastSyncedAt).getTime()).toBe(999);
+    } finally {
+      delete process.env.PLAUD_SYNC_BUDGET_MS;
+    }
+  });
 });

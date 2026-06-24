@@ -72,7 +72,16 @@ export async function listFiles(
 export async function getFile(client: Client, id: string): Promise<PlaudFileDetail> {
   const res = await client.callTool({ name: "get_file", arguments: { file_id: id } });
   const parsed = parseToolJson<any>(res);
-  return mapFileDetail(parsed.data ?? parsed.file ?? parsed);
+  const raw = parsed.data ?? parsed.file ?? parsed;
+  const detail = mapFileDetail(raw);
+  if (!detail.presignedUrl && raw && typeof raw === "object") {
+    // Diagnostic for recordings stuck "waiting for audio": dump the response's
+    // top-level keys (not values — they may hold tokens) so we can tell a genuine
+    // not-ready-yet from the audio URL arriving under a field mapFileDetail doesn't
+    // recognize (we look for presigned_url / url / audio_url).
+    console.warn(`[plaud getFile] no audio URL for ${id}; response keys: [${Object.keys(raw).join(", ")}]`);
+  }
+  return detail;
 }
 
 export async function downloadAudio(url: string): Promise<{ bytes: Buffer; contentType: string }> {

@@ -181,17 +181,34 @@ describe("syncPlaud", () => {
     const result = await syncPlaud();
     expect(result.note).toMatch(/already running/i);
     expect(calls.transcribed).toHaveLength(0);
-    expect(lastWriteWith("lastResult")).toBeUndefined(); // skip does not overwrite lastResult
-    expect(lastWriteWith("runningSince")).toBeUndefined(); // lock not touched on skip
+    // skip records its own result so the UI's "last sync" reflects the attempt...
+    expect(lastWriteWith("lastResult").lastResult.note).toMatch(/already running/i);
+    // ...but never touches the lock (another run owns it).
+    expect(lastWriteWith("runningSince")).toBeUndefined();
   });
 
-  it("proceeds when runningSince is stale (older than the 30-min TTL)", async () => {
-    calls.syncRow = { id: "s1", lastSyncedAt: null, lastResult: null, runningSince: new Date(Date.now() - 31 * 60 * 1000) };
+  it("takes over a stale lock (older than the 10-min stale window)", async () => {
+    calls.syncRow = { id: "s1", lastSyncedAt: null, lastResult: null, runningSince: new Date(Date.now() - 11 * 60 * 1000) };
     calls.files = [{ fileId: "f1", name: "One", startAtMs: 1000, trashed: false }];
     const { syncPlaud } = await import("./sync");
     const result = await syncPlaud();
     expect(result.newCount).toBe(1);
     expect(lastWriteWith("runningSince").runningSince).toBeNull(); // cleared in finally
+  });
+
+  it("surfaces a processing error (imported but parked in 'error' status) without blocking the checkpoint", async () => {
+    calls.findFirstResult = { status: "error", errorMessage: "scribe 500" };
+    calls.files = [
+      { fileId: "f1", name: "One", startAtMs: 1000, trashed: false },
+      { fileId: "f2", name: "Two", startAtMs: 2000, trashed: false },
+    ];
+    const { syncPlaud } = await import("./sync");
+    const result = await syncPlaud();
+    expect(result.newCount).toBe(2); // still imported
+    expect(result.processingErrorCount).toBe(2);
+    expect(result.failedCount).toBe(0);
+    expect(result.error).toBeUndefined(); // not a top-level error — checkpoint still advances
+    expect(new Date(lastWriteWith("lastSyncedAt").lastSyncedAt).getTime()).toBe(2000);
   });
 
   it("clears runningSince in finally even when not connected", async () => {

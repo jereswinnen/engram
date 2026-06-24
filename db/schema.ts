@@ -179,6 +179,8 @@ export const syncState = pgTable("sync_state", {
     skippedCount: number;
     failedCount: number;
     deferredCount: number;
+    processingErrorCount?: number;
+    note?: string;
     error?: string;
   }>(),
 });

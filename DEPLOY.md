@@ -253,15 +253,23 @@ automatically by an hourly cron service that calls `POST /api/sync`.
 One-time setup:
 1. Generate a strong random secret and set `CRON_SECRET` on the **web** service.
 2. In the same Railway project, **New → Service → from the same GitHub repo**.
-3. On that service: **Settings → Cron Schedule = `0 * * * *`**;
-   **Start Command = `node scripts/sync-cron.mjs`**.
-4. Set its env vars: `CRON_SECRET` (same value as the web service) and
+3. Point this service at its own config file so it does **not** inherit the web
+   service's `pnpm start` from `railway.json`: **Settings → Config-as-code →
+   Railway Config File = `railway.cron.json`**. That file sets the start command
+   to `node scripts/sync-cron.mjs` (and skips the web preDeploy migration).
+   > ⚠️ Without this, Railway applies the repo's root `railway.json` to *every*
+   > service, so the cron service runs `pnpm start` (the web server) instead of
+   > the sync script — it never exits (runs for an hour+) and never POSTs
+   > `/api/sync`, so the "last sync" timestamp never moves.
+4. On that service: **Settings → Cron Schedule = `0 * * * *`**.
+5. Set its env vars: `CRON_SECRET` (same value as the web service) and
    `APP_URL` = the web app's public URL (e.g. `https://engram-production.up.railway.app`).
-5. Save. Railway runs it hourly; it POSTs `/api/sync` then exits. Run history
-   and logs appear on that service; the sync outcome also shows in Settings.
+6. Save. Railway runs it hourly; it POSTs `/api/sync` then exits. Run history
+   and logs appear on that service (look for `sync-cron: POST … -> 200`); the
+   sync outcome also shows in Settings.
 
 A run that overlaps an in-progress sync is skipped (the `runningSince` guard);
-a crashed run self-heals after 30 minutes.
+a crashed run self-heals after ~10 minutes.
 
 ---
 

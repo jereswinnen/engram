@@ -12,8 +12,12 @@ import { getSessionCookie } from "better-auth/cookies";
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Always allow the auth API and the login page through
-  if (pathname.startsWith("/api/auth") || pathname === "/login") {
+  // Always allow the auth API and the login page through. /api/sync is also let
+  // through: it's called by the cron with a Bearer CRON_SECRET (no session cookie),
+  // and its handler does its own authorization (Bearer secret OR a valid session),
+  // so the optimistic cookie redirect below must not turn its POST into a redirect
+  // to /login (a 307 keeps the method → POST /login → 405).
+  if (pathname.startsWith("/api/auth") || pathname === "/login" || pathname === "/api/sync") {
     return NextResponse.next();
   }
 

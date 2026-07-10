@@ -22,6 +22,7 @@ Run locally (requires OpenSSL):
 ```bash
 openssl rand -hex 32   # paste as ENCRYPTION_KEY
 openssl rand -hex 32   # paste as BETTER_AUTH_SECRET
+openssl rand -hex 32   # paste as MAC_RECORDER_API_TOKEN
 ```
 
 Each produces 64 hex characters (32 bytes of entropy).
@@ -31,7 +32,8 @@ Each produces 64 hex characters (32 bytes of entropy).
 ## 3. Set environment variables in the Railway app service
 
 Set every variable below under **Variables** → **Raw Editor** (or one by one).
-All are required at startup; the app will throw at boot if any are missing.
+The core app variables are required at startup; `MAC_RECORDER_API_TOKEN` is required
+to enable native-recorder uploads.
 
 ```
 # Injected automatically by the Postgres plugin — verify it is present:
@@ -58,6 +60,9 @@ R2_BUCKET=engram
 BETTER_AUTH_SECRET=<64 hex chars>
 BETTER_AUTH_URL=https://<your-service>.up.railway.app
 NEXT_PUBLIC_APP_URL=https://<your-service>.up.railway.app
+
+# Native macOS recorder upload authorization — 64 hex chars
+MAC_RECORDER_API_TOKEN=<64 hex chars>
 ```
 
 > **Note:** `BETTER_AUTH_URL` and `NEXT_PUBLIC_APP_URL` must be the same Railway public
@@ -154,6 +159,27 @@ Once logged in, run through each of the following manually:
 - [ ] **Full phone end-to-end**: on your phone, open the Railway URL → log in → upload a
   new Dutch audio clip → wait for transcription + enhancement → verify all four fields
   appear + audio plays back behind login.
+
+---
+
+## Native macOS recorder ingestion
+
+The recorder uploads a multipart request to `POST /api/recordings` with this header:
+
+```http
+Authorization: Bearer <MAC_RECORDER_API_TOKEN>
+```
+
+Send the M4A as `file`. Optional fields are `title`, `source=mac`,
+`durationSeconds` (a non-negative integer), and `startedAt` (an ISO 8601 date).
+Successful uploads return HTTP 201 with a recording ID and relative URL:
+
+```json
+{ "id": "<recording-id>", "url": "/recordings/<recording-id>" }
+```
+
+Browser uploads can continue to use the same endpoint with a logged-in session.
+`CRON_SECRET` does not authorize recorder uploads.
 
 ---
 

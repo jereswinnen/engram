@@ -3,6 +3,7 @@ import SwiftUI
 
 struct MenuBarView: View {
   @Bindable var controller: RecorderController
+  @Environment(\.dismiss) private var dismiss
   @Environment(\.openSettings) private var openSettings
 
   var body: some View {
@@ -25,18 +26,38 @@ struct MenuBarView: View {
       Divider()
 
       HStack {
-        Button("Settings…") { openSettings() }
-          .buttonStyle(.plain)
+        Button {
+          openSettings()
+        } label: {
+          Label("Settings", systemImage: "gearshape")
+        }
+        .buttonStyle(.plain)
+
         Spacer()
-        Text("⌘⇧R")
-          .font(.caption.monospaced())
+
+        Label("⌘⇧R", systemImage: "keyboard")
+          .font(.caption)
           .foregroundStyle(.secondary)
-        Button("Quit") { controller.quitApplication() }
-          .buttonStyle(.plain)
+
+        Spacer()
+
+        Button {
+          controller.quitApplication()
+        } label: {
+          Label("Quit", systemImage: "power")
+        }
+        .buttonStyle(.plain)
       }
-      .padding(14)
+      .font(.callout)
+      .padding(.horizontal, 16)
+      .padding(.vertical, 13)
     }
-    .frame(width: 360)
+    .frame(width: 380)
+    .onChange(of: controller.phase) { _, phase in
+      if phase == .preparing {
+        dismiss()
+      }
+    }
   }
 
   private var header: some View {
@@ -61,6 +82,8 @@ struct MenuBarView: View {
         )
       }
       .buttonStyle(.borderedProminent)
+      .buttonBorderShape(.roundedRectangle(radius: 10))
+      .controlSize(.large)
       .tint(controller.isRecording ? .red : .accentColor)
       .disabled(!controller.isRecording && !controller.canStart)
     }
@@ -89,49 +112,95 @@ private struct RecordingRow: View {
   let controller: RecorderController
 
   var body: some View {
-    HStack(spacing: 10) {
+    HStack(spacing: 12) {
       Image(systemName: statusSymbol)
         .foregroundStyle(statusColor)
-        .frame(width: 20)
+        .font(.system(size: 16, weight: .semibold))
+        .frame(width: 22)
+        .help(statusDescription)
 
-      VStack(alignment: .leading, spacing: 2) {
+      VStack(alignment: .leading, spacing: 3) {
         Text(recording.title)
+          .font(.body.weight(.medium))
           .lineLimit(1)
-        Text("\(recording.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(duration)")
+
+        Text(detailText)
           .font(.caption)
           .foregroundStyle(.secondary)
+          .lineLimit(1)
       }
+      .layoutPriority(1)
 
-      Spacer()
+      Spacer(minLength: 6)
 
       if recording.uploadState == .failed || recording.uploadState == .local {
-        Button("Retry") { controller.retryUpload(recording.id) }
-          .controlSize(.small)
+        Button {
+          controller.retryUpload(recording.id)
+        } label: {
+          Label("Retry", systemImage: "arrow.clockwise")
+        }
+        .buttonStyle(.borderless)
+        .controlSize(.small)
       } else if recording.uploadState == .uploaded {
-        Button("Open") { controller.openInEngram(recording) }
-          .controlSize(.small)
+        Button {
+          controller.openInEngram(recording)
+        } label: {
+          Label("Open", systemImage: "arrow.up.right.square")
+        }
+        .buttonStyle(.borderless)
+        .controlSize(.small)
       } else {
         ProgressView()
           .controlSize(.small)
       }
 
       Menu {
-        Button("Show in Finder") { controller.revealLocalFile(recording) }
+        Button {
+          controller.revealLocalFile(recording)
+        } label: {
+          Label("Show in Finder", systemImage: "folder")
+        }
+
         if let error = recording.lastError {
+          Divider()
           Text(error)
         }
       } label: {
-        Image(systemName: "ellipsis")
+        Image(systemName: "ellipsis.circle")
+          .font(.system(size: 15))
+          .foregroundStyle(.secondary)
       }
       .menuStyle(.borderlessButton)
-      .frame(width: 24)
+      .menuIndicator(.hidden)
+      .fixedSize()
+      .help("More actions")
     }
-    .padding(.horizontal, 14)
-    .padding(.vertical, 8)
+    .padding(.horizontal, 16)
+    .padding(.vertical, 10)
   }
 
   private var duration: String {
     String(format: "%d:%02d", recording.durationSeconds / 60, recording.durationSeconds % 60)
+  }
+
+  private var detailText: String {
+    switch recording.uploadState {
+    case .local, .failed:
+      "Saved locally · \(duration)"
+    case .uploading:
+      "Uploading · \(duration)"
+    case .uploaded:
+      "\(recording.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(duration)"
+    }
+  }
+
+  private var statusDescription: String {
+    switch recording.uploadState {
+    case .local: "Saved locally"
+    case .uploading: "Uploading"
+    case .uploaded: "Uploaded"
+    case .failed: "Upload failed — saved locally"
+    }
   }
 
   private var statusSymbol: String {

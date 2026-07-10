@@ -47,6 +47,14 @@ xcodebuild \
 The target has App Sandbox, microphone input, and outgoing-network entitlements. Set
 your Apple development team in Xcode before distributing the app.
 
+## Source layout
+
+- `App` — SwiftUI lifecycle, settings state, and the global shortcut.
+- `Recording` — capture, mixing, persistence models, and recording coordination.
+- `Services` — Engram networking and Keychain access.
+- `UI` — menu-bar, capsule panel, and Settings views.
+- `Resources` — sandbox entitlements and future app assets.
+
 ## Validation checklist
 
 - Record silence, microphone-only speech, system-only speech, and overlapping speech.

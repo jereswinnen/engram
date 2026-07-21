@@ -56,6 +56,7 @@ enum RecorderError: LocalizedError {
   case noDisplayAvailable
   case invalidAudioFormat
   case audioWriteFailed(String)
+  case noAudioCaptured
   case noActiveRecording
 
   var errorDescription: String? {
@@ -72,6 +73,8 @@ enum RecorderError: LocalizedError {
       "The current audio devices could not provide a recordable format."
     case .audioWriteFailed(let message):
       "The local audio file could not be completed: \(message)"
+    case .noAudioCaptured:
+      "No audio frames were captured. The recording was not saved."
     case .noActiveRecording:
       "There is no active recording to stop."
     }

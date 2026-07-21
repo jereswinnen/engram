@@ -2,55 +2,108 @@ import AppKit
 import SwiftUI
 
 struct CapsuleView: View {
+  static let panelSize = NSSize(width: 50, height: 196)
+
   @Bindable var controller: RecorderController
+  @Environment(\.colorScheme) private var colorScheme
 
   var body: some View {
-    HStack(spacing: 14) {
-      stateSymbol
-        .frame(width: 24, height: 24)
-
+    Group {
       if controller.isRecording {
-        WaveformView(samples: controller.waveform)
-          .frame(width: 112, height: 34)
-
-        Text(formattedElapsed)
-          .font(.system(.body, design: .monospaced, weight: .medium))
-          .contentTransition(.numericText())
-
-        Button {
-          controller.toggleRecording()
-        } label: {
-          Image(systemName: "stop.fill")
-            .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(.white)
-            .frame(width: 34, height: 34)
-            .background(.red, in: Circle())
-        }
-        .buttonStyle(.plain)
-        .help("Stop recording (⌘⇧R)")
+        recordingContent
       } else {
-        Text(controller.statusTitle)
-          .font(.system(size: 14, weight: .medium))
-          .lineLimit(1)
-          .frame(maxWidth: .infinity, alignment: .leading)
-
-        if case .success(let url) = controller.phase {
-          Button("Open") {
-            NSWorkspace.shared.open(url)
-          }
-          .buttonStyle(.borderedProminent)
-          .controlSize(.small)
-        }
+        statusContent
       }
     }
-    .padding(.horizontal, 18)
-    .frame(width: 350, height: 76)
-    .background(.ultraThinMaterial, in: Capsule())
+    .frame(width: Self.panelSize.width, height: Self.panelSize.height)
+    .background(containerBackground, in: containerShape)
     .overlay {
-      Capsule()
-        .strokeBorder(.white.opacity(0.18), lineWidth: 1)
+      containerShape
+        .strokeBorder(containerBorder, lineWidth: 1)
     }
-    .padding(8)
+  }
+
+  private var recordingContent: some View {
+    VStack(spacing: 0) {
+      Text(formattedElapsed)
+        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+        .contentTransition(.numericText())
+        .accessibilityLabel("Recording time \(formattedElapsed)")
+        .padding(.top, 14)
+
+      WaveformView(samples: controller.waveform)
+        .frame(width: 30, height: 78)
+        .padding(.top, 12)
+
+      Spacer(minLength: 8)
+
+      Button {
+        controller.toggleRecording()
+      } label: {
+        Image(systemName: "stop.fill")
+          .font(.system(size: 13, weight: .bold))
+          .foregroundStyle(.red)
+          .frame(width: 34, height: 34)
+          .background(.red.opacity(0.1), in: Circle())
+      }
+      .buttonStyle(.plain)
+      .help("Stop recording (⌘⇧R)")
+      .accessibilityLabel("Stop recording")
+      .padding(.bottom, 8)
+    }
+  }
+
+  private var statusContent: some View {
+    VStack(spacing: 12) {
+      stateSymbol
+        .frame(width: 28, height: 28)
+
+      Text(compactStatusTitle)
+        .font(.system(size: 9, weight: .medium))
+        .multilineTextAlignment(.center)
+        .lineLimit(2)
+        .minimumScaleFactor(0.8)
+        .frame(maxWidth: .infinity)
+
+      if case .success(let url) = controller.phase {
+        Button {
+          NSWorkspace.shared.open(url)
+        } label: {
+          Image(systemName: "arrow.up.right.square")
+            .frame(width: 28, height: 28)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.small)
+        .help("Open in Engram")
+        .accessibilityLabel("Open in Engram")
+      }
+    }
+    .padding(.horizontal, 4)
+  }
+
+  private var containerShape: RoundedRectangle {
+    RoundedRectangle(cornerRadius: 25, style: .continuous)
+  }
+
+  private var containerBackground: Color {
+    colorScheme == .dark ? Color(nsColor: .windowBackgroundColor) : .white
+  }
+
+  private var containerBorder: Color {
+    colorScheme == .dark ? .white.opacity(0.12) : .black.opacity(0.08)
+  }
+
+  private var compactStatusTitle: String {
+    switch controller.phase {
+    case .idle: "Ready"
+    case .preparing: "Starting"
+    case .recording: "Recording"
+    case .finalizing: "Saving"
+    case .uploading: "Uploading"
+    case .processing: "Sent"
+    case .success: "Done"
+    case .failure: "Failed"
+    }
   }
 
   @ViewBuilder
@@ -91,18 +144,27 @@ private struct WaveformView: View {
     Canvas { context, size in
       guard !samples.isEmpty else { return }
       let spacing: CGFloat = 2
-      let barWidth = max(
-        1.5, (size.width - spacing * CGFloat(samples.count - 1)) / CGFloat(samples.count))
-      for (index, sample) in samples.enumerated() {
-        let height = max(3, size.height * CGFloat(sample))
+      let minimumBarHeight: CGFloat = 1.5
+      let maximumBarCount = max(
+        1,
+        Int((size.height + spacing) / (minimumBarHeight + spacing))
+      )
+      let visibleSamples = samples.suffix(maximumBarCount)
+      let barHeight = max(
+        minimumBarHeight,
+        (size.height - spacing * CGFloat(visibleSamples.count - 1))
+          / CGFloat(visibleSamples.count)
+      )
+      for (index, sample) in visibleSamples.enumerated() {
+        let width = max(3, size.width * CGFloat(sample))
         let rect = CGRect(
-          x: CGFloat(index) * (barWidth + spacing),
-          y: (size.height - height) / 2,
-          width: barWidth,
-          height: height
+          x: (size.width - width) / 2,
+          y: CGFloat(index) * (barHeight + spacing),
+          width: width,
+          height: barHeight
         )
         context.fill(
-          Path(roundedRect: rect, cornerRadius: barWidth / 2),
+          Path(roundedRect: rect, cornerRadius: barHeight / 2),
           with: .color(.primary.opacity(0.82))
         )
       }

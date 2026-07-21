@@ -9,7 +9,7 @@ final class CapsulePanelController {
   init(controller: RecorderController) {
     self.controller = controller
     panel = NSPanel(
-      contentRect: NSRect(x: 0, y: 0, width: 350, height: 76),
+      contentRect: NSRect(origin: .zero, size: CapsuleView.panelSize),
       styleMask: [.borderless, .nonactivatingPanel],
       backing: .buffered,
       defer: false

@@ -8,9 +8,9 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
   typealias MeterHandler = @Sendable (Float) -> Void
   typealias FailureHandler = @Sendable (Error) -> Void
 
-  private let engine = AVAudioEngine()
-  private let recordingMixer = AVAudioMixerNode()
-  private let systemAudioPlayer = AVAudioPlayerNode()
+  private var engine: AVAudioEngine?
+  private var recordingMixer: AVAudioMixerNode?
+  private var systemAudioPlayer: AVAudioPlayerNode?
   private let captureQueue = DispatchQueue(
     label: "com.jereswinnen.engram.capture",
     qos: .userInitiated
@@ -28,6 +28,7 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
   private var nodesAttached = false
   private var tapInstalled = false
   private var writerError: Error?
+  private var writtenFrameCount: AVAudioFramePosition = 0
   private var lastMeterUpdate: TimeInterval = 0
   private var meterHandler: MeterHandler?
   private var failureHandler: FailureHandler?
@@ -94,6 +95,9 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
         meterHandler: meterHandler,
         failureHandler: failureHandler
       )
+      guard let engine, let systemAudioPlayer else {
+        throw RecorderError.invalidAudioFormat
+      }
       engine.prepare()
       try engine.start()
       systemAudioPlayer.play()
@@ -113,15 +117,14 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
     }
     guard let activeStream else { throw RecorderError.noActiveRecording }
 
-    do {
-      try await activeStream.stopCapture()
-    } catch {
-      finishAudioEngine()
-      throw error
+    await stopScreenCapture(activeStream)
+
+    let result = finishAudioEngine()
+    if let error = result.error {
+      throw RecorderError.audioWriteFailed(error.localizedDescription)
     }
-    let writeError = finishAudioEngine()
-    if let writeError {
-      throw RecorderError.audioWriteFailed(writeError.localizedDescription)
+    if result.frameCount == 0 {
+      throw RecorderError.noAudioCaptured
     }
   }
 
@@ -141,7 +144,7 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
     do {
       let buffer = try sampleBuffer.audioBuffer()
       guard let converted = convertSystemAudio(buffer) else { return }
-      systemAudioPlayer.scheduleBuffer(converted)
+      systemAudioPlayer?.scheduleBuffer(converted)
     } catch {
       // A malformed individual system-audio buffer should not end the recording.
     }
@@ -157,6 +160,9 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
     meterHandler: @escaping MeterHandler,
     failureHandler: @escaping FailureHandler
   ) throws {
+    let engine = AVAudioEngine()
+    let recordingMixer = AVAudioMixerNode()
+    let systemAudioPlayer = AVAudioPlayerNode()
     let input = engine.inputNode
     let inputFormat = input.inputFormat(forBus: 0)
     guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
@@ -168,6 +174,7 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
     lastMeterUpdate = 0
     systemAudioConverter = nil
     writerError = nil
+    writtenFrameCount = 0
     audioFile = try AVAudioFile(
       forWriting: outputURL,
       settings: [
@@ -196,6 +203,10 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
       self?.consumeMixedAudio(buffer)
     }
     tapInstalled = true
+
+    self.engine = engine
+    self.recordingMixer = recordingMixer
+    self.systemAudioPlayer = systemAudioPlayer
   }
 
   private func consumeMixedAudio(_ buffer: AVAudioPCMBuffer) {
@@ -203,6 +214,9 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
     writerQueue.async { [weak self] in
       do {
         try self?.audioFile?.write(from: copiedBuffer)
+        self?.stateLock.withLock {
+          self?.writtenFrameCount += AVAudioFramePosition(copiedBuffer.frameLength)
+        }
       } catch {
         self?.stateLock.withLock {
           if self?.writerError == nil { self?.writerError = error }
@@ -253,20 +267,25 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
   }
 
   @discardableResult
-  private func finishAudioEngine() -> Error? {
-    systemAudioPlayer.stop()
-    engine.stop()
-    if tapInstalled {
+  private func finishAudioEngine() -> AudioWriteResult {
+    let engine = engine
+    let recordingMixer = recordingMixer
+    let systemAudioPlayer = systemAudioPlayer
+
+    systemAudioPlayer?.stop()
+    engine?.stop()
+    if tapInstalled, let recordingMixer {
       recordingMixer.removeTap(onBus: 0)
-      tapInstalled = false
     }
+    tapInstalled = false
     writerQueue.sync {}
     audioFile = nil
     stream = nil
     systemAudioConverter = nil
     meterHandler = nil
     failureHandler = nil
-    if nodesAttached {
+    if nodesAttached, let engine, let recordingMixer, let systemAudioPlayer {
+      engine.disconnectNodeOutput(engine.inputNode)
       engine.disconnectNodeInput(recordingMixer)
       engine.disconnectNodeOutput(recordingMixer)
       engine.disconnectNodeInput(systemAudioPlayer)
@@ -274,16 +293,37 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
       engine.detach(recordingMixer)
       nodesAttached = false
     }
-    return stateLock.withLock { writerError }
+    if let engine {
+      engine.inputNode.auAudioUnit.deallocateRenderResources()
+      engine.outputNode.auAudioUnit.deallocateRenderResources()
+      engine.reset()
+    }
+    self.systemAudioPlayer = nil
+    self.recordingMixer = nil
+    self.engine = nil
+    return stateLock.withLock {
+      AudioWriteResult(error: writerError, frameCount: writtenFrameCount)
+    }
   }
 
   private func stopAfterFailedStart() async {
     if let stream {
-      try? await stream.stopCapture()
+      await stopScreenCapture(stream)
     }
     finishAudioEngine()
     stateLock.withLock { isCapturing = false }
   }
+
+  private func stopScreenCapture(_ stream: SCStream) async {
+    try? await stream.stopCapture()
+    captureQueue.sync {}
+    try? stream.removeStreamOutput(self, type: .audio)
+  }
+}
+
+private struct AudioWriteResult {
+  let error: Error?
+  let frameCount: AVAudioFramePosition
 }
 
 extension CMSampleBuffer {

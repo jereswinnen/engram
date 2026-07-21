@@ -165,6 +165,14 @@ private struct RecordingRow: View {
           Divider()
           Text(error)
         }
+
+        Divider()
+
+        Button(role: .destructive) {
+          confirmDeletion()
+        } label: {
+          Label("Delete Recording…", systemImage: "trash")
+        }
       } label: {
         Image(systemName: "ellipsis.circle")
           .font(.system(size: 15))
@@ -177,6 +185,26 @@ private struct RecordingRow: View {
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 10)
+  }
+
+  private func confirmDeletion() {
+    let alert = NSAlert()
+    alert.messageText = "Delete this recording?"
+    if recording.uploadState == .uploaded {
+      alert.informativeText =
+        "This removes the local audio and history entry. "
+        + "The recording in Engram is not deleted."
+    } else {
+      alert.informativeText =
+        "This permanently removes the local audio. It has not been saved to Engram."
+    }
+    alert.alertStyle = .warning
+    alert.addButton(withTitle: "Delete Recording").hasDestructiveAction = true
+    alert.addButton(withTitle: "Cancel")
+
+    NSApp.activate(ignoringOtherApps: true)
+    guard alert.runModal() == .alertFirstButtonReturn else { return }
+    controller.deleteRecording(recording.id)
   }
 
   private var duration: String {

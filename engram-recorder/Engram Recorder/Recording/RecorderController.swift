@@ -129,7 +129,10 @@ final class RecorderController {
     do {
       try await capture.stop()
     } catch {
-      // Preserve and index any audio already finalized by AVAudioFile.
+      clearActiveRecording()
+      try? FileManager.default.removeItem(at: outputURL)
+      showFailure(error.localizedDescription)
+      return
     }
 
     let duration = max(1, Int(Date().timeIntervalSince(startedAt).rounded()))
@@ -172,6 +175,16 @@ final class RecorderController {
 
   func revealLocalFile(_ recording: LocalRecording) {
     NSWorkspace.shared.activateFileViewerSelecting([recording.audioURL])
+  }
+
+  func deleteRecording(_ recordingID: UUID) {
+    let uploadTask = uploadTasks.removeValue(forKey: recordingID)
+    uploadTask?.cancel()
+
+    Task { [weak self] in
+      await uploadTask?.value
+      await self?.deleteLocalRecording(recordingID)
+    }
   }
 
   func clearStatus() {
@@ -268,6 +281,20 @@ final class RecorderController {
 
   private func persistHistory() async {
     try? await archive.save(recordings)
+  }
+
+  private func deleteLocalRecording(_ recordingID: UUID) async {
+    guard let recording = recordings.first(where: { $0.id == recordingID }) else {
+      return
+    }
+
+    do {
+      try await archive.deleteAudio(for: recording)
+      recordings.removeAll { $0.id == recordingID }
+      try await archive.save(recordings)
+    } catch {
+      showFailure("Could not delete the recording")
+    }
   }
 
   private func appendWaveform(_ level: Float) {

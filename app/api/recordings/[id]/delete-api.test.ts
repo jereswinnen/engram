@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   deleteObject: vi.fn(),
@@ -25,10 +25,11 @@ vi.mock("@/lib/storage", () => ({
 
 import { DELETE } from "./route"
 
-function request(id = "recording-1") {
+function request(id = "recording-1", headers: Record<string, string> = {}) {
   return {
     request: new NextRequest(`http://localhost/api/recordings/${id}`, {
       method: "DELETE",
+      headers,
     }),
     context: { params: Promise.resolve({ id }) },
   }
@@ -36,17 +37,23 @@ function request(id = "recording-1") {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  process.env.MAC_RECORDER_API_TOKEN = "recorder-secret"
   mocks.getSession.mockResolvedValue({ user: { id: "user-1" } })
   mocks.findRecording.mockResolvedValue({
     id: "recording-1",
+    source: "mac",
     storageKey: "audio/recording-1.m4a",
   })
   mocks.deleteObject.mockResolvedValue(undefined)
   mocks.deleteWhere.mockResolvedValue(undefined)
 })
 
+afterEach(() => {
+  delete process.env.MAC_RECORDER_API_TOKEN
+})
+
 describe("DELETE /api/recordings/[id]", () => {
-  it("requires an authenticated browser session", async () => {
+  it("requires a browser session or recorder token", async () => {
     mocks.getSession.mockResolvedValue(null)
     const { request: req, context } = request()
 
@@ -54,6 +61,36 @@ describe("DELETE /api/recordings/[id]", () => {
 
     expect(response.status).toBe(401)
     expect(mocks.findRecording).not.toHaveBeenCalled()
+  })
+
+  it("allows the recorder token to delete a Mac recording", async () => {
+    mocks.getSession.mockResolvedValue(null)
+    const { request: req, context } = request("recording-1", {
+      authorization: "Bearer recorder-secret",
+    })
+
+    const response = await DELETE(req, context)
+
+    expect(response.status).toBe(200)
+    expect(mocks.deleteObject).toHaveBeenCalledWith("audio/recording-1.m4a")
+  })
+
+  it("does not allow the recorder token to delete a non-Mac recording", async () => {
+    mocks.getSession.mockResolvedValue(null)
+    mocks.findRecording.mockResolvedValue({
+      id: "recording-1",
+      source: "upload",
+      storageKey: "audio/recording-1.m4a",
+    })
+    const { request: req, context } = request("recording-1", {
+      authorization: "Bearer recorder-secret",
+    })
+
+    const response = await DELETE(req, context)
+
+    expect(response.status).toBe(403)
+    expect(mocks.deleteObject).not.toHaveBeenCalled()
+    expect(mocks.deleteWhere).not.toHaveBeenCalled()
   })
 
   it("returns 404 without deleting storage for a missing recording", async () => {

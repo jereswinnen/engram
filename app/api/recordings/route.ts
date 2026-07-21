@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { timingSafeEqual } from "node:crypto"
 import { eq } from "drizzle-orm"
 import { db } from "@/db"
 import { recordings } from "@/db/schema"
 import { getStorage, buildAudioKey } from "@/lib/storage"
 import { runTranscription, runEnhancement } from "@/lib/pipeline"
 import { auth } from "@/auth"
+import { isRecordingRequestAuthorized } from "@/lib/recordings/auth"
+
+export { isRecordingRequestAuthorized as isAuthorized } from "@/lib/recordings/auth"
 
 const MAX_DURATION_SECONDS = 2_147_483_647
 
@@ -74,25 +76,6 @@ export function parseRecordingUpload(form: FormData): ParseResult {
   }
 }
 
-// Authorized by the recorder-specific shared secret or an existing browser session.
-export async function isAuthorized(request: Request): Promise<boolean> {
-  const recorderToken = process.env.MAC_RECORDER_API_TOKEN
-  const authorization = request.headers.get("authorization")
-  if (recorderToken && authorization?.startsWith("Bearer ")) {
-    const suppliedToken = Buffer.from(authorization.slice("Bearer ".length))
-    const expectedToken = Buffer.from(recorderToken)
-    if (
-      suppliedToken.length === expectedToken.length &&
-      timingSafeEqual(suppliedToken, expectedToken)
-    ) {
-      return true
-    }
-  }
-
-  const session = await auth.api.getSession({ headers: request.headers })
-  return Boolean(session)
-}
-
 export async function GET(request: NextRequest) {
   const session = await auth.api.getSession({ headers: request.headers })
   if (!session)
@@ -103,7 +86,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await isAuthorized(req))) {
+  if (!(await isRecordingRequestAuthorized(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

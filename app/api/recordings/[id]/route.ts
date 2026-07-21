@@ -1,16 +1,16 @@
 import { eq } from "drizzle-orm"
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/auth"
 import { db } from "@/db"
 import { recordings } from "@/db/schema"
+import { authorizeRecordingRequest } from "@/lib/recordings/auth"
 import { getStorage } from "@/lib/storage"
 
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth.api.getSession({ headers: request.headers })
-  if (!session) {
+  const authorization = await authorizeRecordingRequest(request)
+  if (!authorization) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
@@ -20,6 +20,10 @@ export async function DELETE(
   })
   if (!recording) {
     return NextResponse.json({ error: "Recording not found" }, { status: 404 })
+  }
+
+  if (authorization === "recorder" && recording.source !== "mac") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
   try {

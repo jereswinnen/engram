@@ -144,7 +144,10 @@ private struct RecordingRow: View {
 
       Spacer(minLength: 6)
 
-      if recording.uploadState == .failed || recording.uploadState == .local {
+      if controller.isDeleting(recording.id) {
+        ProgressView()
+          .controlSize(.small)
+      } else if recording.uploadState == .failed || recording.uploadState == .local {
         Button {
           controller.retryUpload(recording.id)
         } label: {
@@ -179,10 +182,26 @@ private struct RecordingRow: View {
 
         Divider()
 
-        Button(role: .destructive) {
-          confirmDeletion()
-        } label: {
-          Label("Delete Recording…", systemImage: "trash")
+        if recording.uploadState == .uploaded {
+          Button(role: .destructive) {
+            confirmLocalDeletion()
+          } label: {
+            Label("Delete Local Copy…", systemImage: "trash")
+          }
+
+          if recording.remoteID != nil {
+            Button(role: .destructive) {
+              confirmEverywhereDeletion()
+            } label: {
+              Label("Delete Everywhere…", systemImage: "trash.slash")
+            }
+          }
+        } else {
+          Button(role: .destructive) {
+            confirmLocalDeletion()
+          } label: {
+            Label("Delete Recording…", systemImage: "trash")
+          }
         }
       } label: {
         Image(systemName: "ellipsis.circle")
@@ -193,14 +212,16 @@ private struct RecordingRow: View {
       .menuIndicator(.hidden)
       .fixedSize()
       .help("More actions")
+      .disabled(controller.isDeleting(recording.id))
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 10)
   }
 
-  private func confirmDeletion() {
+  private func confirmLocalDeletion() {
     let alert = NSAlert()
-    alert.messageText = "Delete this recording?"
+    alert.messageText =
+      recording.uploadState == .uploaded ? "Delete the local copy?" : "Delete this recording?"
     if recording.uploadState == .uploaded {
       alert.informativeText =
         "This removes the local audio and history entry. "
@@ -210,7 +231,9 @@ private struct RecordingRow: View {
         "This permanently removes the local audio. It has not been saved to Engram."
     }
     alert.alertStyle = .warning
-    alert.addButton(withTitle: "Delete Recording").hasDestructiveAction = true
+    let deleteTitle =
+      recording.uploadState == .uploaded ? "Delete Local Copy" : "Delete Recording"
+    alert.addButton(withTitle: deleteTitle).hasDestructiveAction = true
     alert.addButton(withTitle: "Cancel")
 
     NSApp.activate(ignoringOtherApps: true)
@@ -218,18 +241,36 @@ private struct RecordingRow: View {
     controller.deleteRecording(recording.id)
   }
 
+  private func confirmEverywhereDeletion() {
+    let alert = NSAlert()
+    alert.messageText = "Delete this recording everywhere?"
+    alert.informativeText =
+      "This permanently deletes the recording, transcript, and generated content from Engram, "
+      + "then removes the local audio and history entry from this Mac. This cannot be undone."
+    alert.alertStyle = .warning
+    alert.addButton(withTitle: "Delete Everywhere").hasDestructiveAction = true
+    alert.addButton(withTitle: "Cancel")
+
+    NSApp.activate(ignoringOtherApps: true)
+    guard alert.runModal() == .alertFirstButtonReturn else { return }
+    controller.deleteRecording(recording.id, fromEngram: true)
+  }
+
   private var duration: String {
     String(format: "%d:%02d", recording.durationSeconds / 60, recording.durationSeconds % 60)
   }
 
   private var detailText: String {
+    if controller.isDeleting(recording.id) {
+      return "Deleting…"
+    }
     switch recording.uploadState {
     case .local, .failed:
-      "Saved locally · \(duration)"
+      return "Saved locally · \(duration)"
     case .uploading:
-      "Uploading · \(duration)"
+      return "Uploading · \(duration)"
     case .uploaded:
-      "\(recording.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(duration)"
+      return "\(recording.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(duration)"
     }
   }
 

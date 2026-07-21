@@ -48,6 +48,33 @@ actor EngramAPIClient {
     return try JSONDecoder().decode(UploadResult.self, from: data)
   }
 
+  func deleteRecording(
+    remoteID: String,
+    serverURL: URL,
+    token: String
+  ) async throws {
+    let endpoint =
+      serverURL
+      .appendingPathComponent("api", isDirectory: true)
+      .appendingPathComponent("recordings", isDirectory: true)
+      .appendingPathComponent(remoteID, isDirectory: false)
+
+    var request = URLRequest(url: endpoint)
+    request.httpMethod = "DELETE"
+    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+    let (data, response) = try await session.data(for: request)
+    guard let http = response as? HTTPURLResponse else {
+      throw APIError.invalidResponse
+    }
+    // A missing remote recording already satisfies the requested end state.
+    if http.statusCode == 404 { return }
+    guard (200..<300).contains(http.statusCode) else {
+      let message = (try? JSONDecoder().decode(APIErrorBody.self, from: data).error)
+      throw APIError.server(status: http.statusCode, message: message)
+    }
+  }
+
   private func buildMultipartFile(
     at destination: URL,
     boundary: String,
@@ -112,7 +139,7 @@ private enum APIError: LocalizedError {
     case .invalidResponse:
       "Engram returned an invalid response."
     case .server(let status, let message):
-      message ?? "Engram upload failed with HTTP \(status)."
+      message ?? "Engram request failed with HTTP \(status)."
     }
   }
 }

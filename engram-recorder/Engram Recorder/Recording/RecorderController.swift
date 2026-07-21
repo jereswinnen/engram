@@ -24,6 +24,8 @@ final class RecorderController {
   private var elapsedTask: Task<Void, Never>?
   private var dismissalTask: Task<Void, Never>?
   private var uploadTasks: [UUID: Task<Void, Never>] = [:]
+  private var deletionTasks: [UUID: Task<Void, Never>] = [:]
+  private(set) var deletingRecordingIDs: Set<UUID> = []
 
   init(settings: AppSettings) {
     self.settings = settings
@@ -177,14 +179,30 @@ final class RecorderController {
     NSWorkspace.shared.activateFileViewerSelecting([recording.audioURL])
   }
 
-  func deleteRecording(_ recordingID: UUID) {
+  func deleteRecording(_ recordingID: UUID, fromEngram: Bool = false) {
+    guard deletionTasks[recordingID] == nil else { return }
     let uploadTask = uploadTasks.removeValue(forKey: recordingID)
     uploadTask?.cancel()
 
-    Task { [weak self] in
+    deletingRecordingIDs.insert(recordingID)
+    deletionTasks[recordingID] = Task { [weak self] in
       await uploadTask?.value
-      await self?.deleteLocalRecording(recordingID)
+      guard let self else { return }
+      defer {
+        self.deletingRecordingIDs.remove(recordingID)
+        self.deletionTasks[recordingID] = nil
+      }
+      guard !Task.isCancelled else { return }
+      if fromEngram {
+        await self.deleteRemoteAndLocalRecording(recordingID)
+      } else {
+        await self.deleteLocalRecording(recordingID)
+      }
     }
+  }
+
+  func isDeleting(_ recordingID: UUID) -> Bool {
+    deletingRecordingIDs.contains(recordingID)
   }
 
   func clearStatus() {
@@ -198,6 +216,9 @@ final class RecorderController {
         await stopRecording(uploadAfterStop: false)
       }
       for task in uploadTasks.values {
+        task.cancel()
+      }
+      for task in deletionTasks.values {
         task.cancel()
       }
       NSApp.terminate(nil)
@@ -294,6 +315,38 @@ final class RecorderController {
       try await archive.save(recordings)
     } catch {
       showFailure("Could not delete the recording")
+    }
+  }
+
+  private func deleteRemoteAndLocalRecording(_ recordingID: UUID) async {
+    guard let index = recordings.firstIndex(where: { $0.id == recordingID }) else {
+      return
+    }
+    guard let remoteID = recordings[index].remoteID else {
+      showFailure("Could not identify the Engram recording — local copy kept")
+      return
+    }
+    guard let serverURL = settings.serverURL, settings.isConfigured else {
+      showFailure("Could not connect to Engram — local copy kept")
+      return
+    }
+
+    recordings[index].lastError = nil
+    do {
+      try await api.deleteRecording(
+        remoteID: remoteID,
+        serverURL: serverURL,
+        token: settings.trimmedToken
+      )
+      guard !Task.isCancelled else { return }
+      await deleteLocalRecording(recordingID)
+    } catch {
+      guard !Task.isCancelled else { return }
+      if let failedIndex = recordings.firstIndex(where: { $0.id == recordingID }) {
+        recordings[failedIndex].lastError = error.localizedDescription
+        await persistHistory()
+      }
+      showFailure("Could not delete from Engram — local copy kept")
     }
   }
 

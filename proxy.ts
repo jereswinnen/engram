@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-import { getSessionCookie } from "better-auth/cookies";
+import { NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
+import { getSessionCookie } from "better-auth/cookies"
 
 /**
  * Route protection proxy (Next.js 16 — renamed from middleware).
@@ -10,28 +10,27 @@ import { getSessionCookie } from "better-auth/cookies";
  * route handlers via auth.api.getSession.
  */
 export function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname } = request.nextUrl
 
   // Allow routes with their own authentication through. Redirecting their bearer
   // requests would preserve POST and send it to /login instead of the route handler.
   if (
     pathname.startsWith("/api/auth") ||
     pathname === "/login" ||
-    pathname === "/api/sync" ||
     pathname === "/api/recordings"
   ) {
-    return NextResponse.next();
+    return NextResponse.next()
   }
 
   // Optimistic check: does a Better Auth session cookie exist?
-  const sessionCookie = getSessionCookie(request);
+  const sessionCookie = getSessionCookie(request)
   if (!sessionCookie) {
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("callbackUrl", pathname);
-    return NextResponse.redirect(loginUrl);
+    const loginUrl = new URL("/login", request.url)
+    loginUrl.searchParams.set("callbackUrl", pathname)
+    return NextResponse.redirect(loginUrl)
   }
 
-  return NextResponse.next();
+  return NextResponse.next()
 }
 
 export const config = {
@@ -42,4 +41,4 @@ export const config = {
      */
     "/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
-};
+}

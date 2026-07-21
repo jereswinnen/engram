@@ -6,7 +6,7 @@ keeps a recoverable local M4A, and uploads it directly to Engram.
 ## Current phases
 
 1. **Engram ingestion — complete.** `POST /api/recordings` accepts the dedicated
-   recorder bearer token and metadata without reusing `CRON_SECRET`.
+   recorder-specific bearer token and metadata.
 2. **Native recording core — complete.** `AVAudioEngine` captures the microphone,
    `ScreenCaptureKit` supplies system audio, and a dedicated mixer writes 48 kHz,
    stereo, 192 kbps AAC to M4A.

@@ -1,28 +1,34 @@
-import { NextRequest } from "next/server";
-import { describe, expect, it } from "vitest";
-import { proxy } from "./proxy";
+import { NextRequest } from "next/server"
+import { describe, expect, it } from "vitest"
+import { proxy } from "./proxy"
 
 function request(pathname: string) {
-  return new NextRequest(`http://localhost${pathname}`, { method: "POST" });
+  return new NextRequest(`http://localhost${pathname}`, { method: "POST" })
 }
 
 describe("proxy bearer-auth route bypasses", () => {
-  it.each(["/api/sync", "/api/recordings"])(
-    "allows %s to perform its own authorization",
-    (pathname) => {
-      const response = proxy(request(pathname));
+  it("allows recorder uploads to perform their own authorization", () => {
+    const response = proxy(request("/api/recordings"))
 
-      expect(response.headers.get("x-middleware-next")).toBe("1");
-      expect(response.headers.get("location")).toBeNull();
-    }
-  );
+    expect(response.headers.get("x-middleware-next")).toBe("1")
+    expect(response.headers.get("location")).toBeNull()
+  })
+
+  it("protects manual Plaud sync with the browser session proxy", () => {
+    const response = proxy(request("/api/sync"))
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get("location")).toBe(
+      "http://localhost/login?callbackUrl=%2Fapi%2Fsync"
+    )
+  })
 
   it("still redirects protected routes without a session cookie", () => {
-    const response = proxy(request("/recordings"));
+    const response = proxy(request("/recordings"))
 
-    expect(response.status).toBe(307);
+    expect(response.status).toBe(307)
     expect(response.headers.get("location")).toBe(
       "http://localhost/login?callbackUrl=%2Frecordings"
-    );
-  });
-});
+    )
+  })
+})

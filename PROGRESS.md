@@ -28,8 +28,8 @@
 
 ## Remaining Roadmap (post Phase 0)
 
-> Phase 0 code is complete and merged to `main`. Phase 1 is now complete (env vars + cron
-> wiring + docs). See `DEPLOY.md` Section "Phase 1 — Plaud MCP sync" for the full user guide.
+> Phase 0 code is complete and merged to `main`. Plaud automatic polling has since been
+> retired in favor of the native macOS recorder; manual Plaud sync remains as a fallback.
 
 ### Phase 1 — Plaud MCP sync + real device (makes capture automatic)
 
@@ -51,10 +51,8 @@ network. Full design + plan in
 - [x] **Sync orchestration** — checkpoint on `startAtMs`, dedup on `fileId`, skip trashed,
       per-item error isolation, reuse Phase 0 pipeline (Scribe + LLM).
       (`lib/plaud/sync.ts` + `app/api/sync/route.ts`)
-- [x] **Cron auth gate** — `/api/sync` authorized by session (manual button) **or**
-      `CRON_SECRET` bearer header (cron); else 401. (`app/api/sync/auth.test.ts`)
-- [x] **Env var** — `CRON_SECRET` (required, generated).
-      (`.env.example`, `railway.json` ready for dashboard cron config, `DEPLOY.md` step-by-step)
+- [x] **Manual sync auth** — `/api/sync` is restricted to a logged-in browser session.
+      (`app/api/sync/auth.test.ts`)
 - [x] **Settings UI** — OAuth connect/disconnect button, show connection status, manual
       "Sync now" button, last-sync result (counts + timestamp + error state).
       (`app/settings/page.tsx`)
@@ -72,21 +70,11 @@ network. Full design + plan in
       device; verify Desktop app → cloud → Engram → enhanced summary flow. (Out of scope for
       Phase 1, deferred to Phase 2 device story.)
 
-#### Scheduled sync — hourly Railway cron service (COMPLETE)
+#### Scheduled sync — retired
 
-Automated sync runs every hour via a Railway cron service hitting `POST /api/sync` with
-the `CRON_SECRET` bearer token. A concurrency guard (`runningSince` timestamp) prevents
-overlapping runs from double-importing recordings; a crashed run self-heals after 30 minutes.
-
-Full design and implementation: [Engram Scheduled Sync Design](docs/superpowers/specs/2026-06-23-engram-scheduled-sync-design.md)
-
-Implementation:
-- [x] **Concurrency guard** — `syncState.runningSince` timestamp; skip if recent, set at start, clear in `finally`; 30-min TTL self-heals crashes. (`lib/plaud/sync.ts`)
-- [x] **Migration** — `runningSince` column added to `syncState` table.
-- [x] **Cron script** — `scripts/sync-cron.mjs` (Node ESM, no deps); reads `APP_URL` and `CRON_SECRET` from env; POSTs `/api/sync` with bearer; exits non-zero on error (Railway marks failed runs).
-- [x] **Railway cron setup docs** — step-by-step in `DEPLOY.md`; operator performs once.
-
-**One-time operator setup:** See `DEPLOY.md` section "Scheduled sync (Railway cron service)" for exact steps. Requires generating `CRON_SECRET`, creating a new Railway cron service from the same repo, setting the schedule to `0 * * * *`, and configuring env vars (`CRON_SECRET` + `APP_URL`).
+The hourly Railway cron service, its bearer credential, and its runner were removed after
+the native macOS recorder completed end-to-end validation. Manual Plaud sync remains
+available from Settings during the transition.
 
 ### Phase 1+ — deferred UX features
 
@@ -114,10 +102,12 @@ Implementation:
 
 Glossary feature enables domain-specific terminology management with Scribe keyterm biasing,
 alias auto-correction, and summary injection. Full spec and implementation plan:
+
 - [Phase 2 Glossary Design Spec](docs/superpowers/specs/2026-06-23-engram-phase-2-glossary-design.md)
 - [Phase 2 Glossary Implementation Plan](docs/superpowers/plans/2026-06-23-engram-phase-2-glossary.md)
 
 Implementation:
+
 - [x] **Glossary schema** — `glossary` table (`id`, `term`, `aliases`, `createdAt`, `updatedAt`)
 - [x] **Scribe keyterms** — sanitize glossary to Scribe limits; inject into transcription options
 - [x] **Deterministic alias correction** — regex-based pass that rewrites aliases → canonical in transcript
@@ -168,13 +158,13 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params  // must await
+  const { id } = await params // must await
 }
 
 // Page with searchParams — Next.js 16
-export default async function Page(props: PageProps<'/blog/[slug]'>) {
+export default async function Page(props: PageProps<"/blog/[slug]">) {
   const { slug } = await props.params
-  const query   = await props.searchParams
+  const query = await props.searchParams
 }
 ```
 
@@ -188,9 +178,9 @@ The `edge` runtime is NOT supported in `proxy`; it runs Node.js only.
 
 ```ts
 // Next.js 15 (broken in 16)
-revalidateTag('posts')
+revalidateTag("posts")
 // Next.js 16
-revalidateTag('posts', 'max')
+revalidateTag("posts", "max")
 ```
 
 Use `updateTag` (Server Actions only) for immediate cache expiry.
@@ -198,7 +188,7 @@ Use `updateTag` (Server Actions only) for immediate cache expiry.
 ### `cacheLife` / `cacheTag` — `unstable_` prefix removed
 
 ```ts
-import { cacheLife, cacheTag } from 'next/cache'  // no unstable_ prefix
+import { cacheLife, cacheTag } from "next/cache" // no unstable_ prefix
 ```
 
 ### Turbopack is the default bundler (Next.js 16)

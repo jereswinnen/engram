@@ -12,11 +12,11 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
   private var recordingMixer: AVAudioMixerNode?
   private var systemAudioPlayer: AVAudioPlayerNode?
   private let captureQueue = DispatchQueue(
-    label: "com.jereswinnen.engram.capture",
+    label: "jeremys.engram.capture",
     qos: .userInitiated
   )
   private let writerQueue = DispatchQueue(
-    label: "com.jereswinnen.engram.audio-writer",
+    label: "jeremys.engram.audio-writer",
     qos: .utility
   )
   private let stateLock = NSLock()

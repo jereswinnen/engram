@@ -2,6 +2,8 @@ import AppKit
 import SwiftUI
 
 struct MenuBarView: View {
+  private static let contentHeight: CGFloat = 196
+
   @Bindable var controller: RecorderController
   @Environment(\.dismiss) private var dismiss
   @Environment(\.openSettings) private var openSettings
@@ -12,16 +14,25 @@ struct MenuBarView: View {
 
       Divider()
 
-      if controller.recordings.isEmpty {
-        ContentUnavailableView(
-          "No recordings yet",
-          systemImage: "waveform",
-          description: Text("Recordings are saved locally before upload.")
-        )
-        .frame(height: 180)
-      } else {
-        history
+      Group {
+        if controller.recordings.isEmpty {
+          ContentUnavailableView(
+            "No recordings yet",
+            systemImage: "waveform",
+            description: Text("Recordings are saved locally before upload.")
+          )
+        } else {
+          ScrollView {
+            history
+          }
+          .scrollIndicators(.automatic)
+        }
       }
+      // MenuBarExtra's AppKit host can leave stale pixels behind when its
+      // intrinsic height shrinks. Keep the host window stable and scroll the
+      // recording history instead of repeatedly resizing the popover.
+      .frame(height: Self.contentHeight)
+      .clipped()
 
       Divider()
 

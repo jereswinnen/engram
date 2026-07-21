@@ -85,7 +85,13 @@ struct MenuBarView: View {
       Spacer()
 
       Button {
-        controller.toggleRecording()
+        if controller.isRecording {
+          controller.toggleRecording()
+        } else if controller.detectedMeeting != nil {
+          controller.recordDetectedMeeting()
+        } else {
+          controller.toggleRecording()
+        }
       } label: {
         Label(
           controller.isRecording ? "Stop" : "Record",

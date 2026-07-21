@@ -11,16 +11,20 @@ final class RecorderController {
   private(set) var recordings: [LocalRecording] = []
   private(set) var elapsedSeconds = 0
   private(set) var waveform = Array(repeating: Float(0.08), count: 28)
+  private(set) var detectedMeeting: DetectedMeeting?
 
   let settings: AppSettings
   var phaseHandler: ((RecorderPhase) -> Void)?
+  var meetingPromptHandler: ((DetectedMeeting?) -> Void)?
 
   private let capture = AudioCaptureService()
   private let archive: RecordingArchive
   private let api = EngramAPIClient()
+  private let meetingDetector: GoogleMeetDetector
   private var activeRecordingID: UUID?
   private var activeOutputURL: URL?
   private var activeStartedAt: Date?
+  private var activeMeetingSessionID: UUID?
   private var elapsedTask: Task<Void, Never>?
   private var dismissalTask: Task<Void, Never>?
   private var uploadTasks: [UUID: Task<Void, Never>] = [:]
@@ -28,8 +32,17 @@ final class RecorderController {
   private(set) var deletingRecordingIDs: Set<UUID> = []
 
   init(settings: AppSettings) {
+    let meetingDetector = GoogleMeetDetector()
     self.settings = settings
+    self.meetingDetector = meetingDetector
     archive = RecordingArchive()
+    meetingDetector.eventHandler = { [weak self] event in
+      self?.handleMeetingDetection(event)
+    }
+    settings.meetingDetectionModeChanged = { [weak self] mode in
+      self?.configureMeetingDetection(for: mode)
+    }
+    configureMeetingDetection(for: settings.meetingDetectionMode)
     Task { await loadHistory() }
   }
 
@@ -49,7 +62,7 @@ final class RecorderController {
   var statusTitle: String {
     switch phase {
     case .idle:
-      "Ready"
+      detectedMeeting == nil ? "Ready" : "\(detectedMeeting?.title ?? "Meeting") detected"
     case .preparing:
       "Preparing…"
     case .recording:
@@ -69,6 +82,9 @@ final class RecorderController {
 
   func toggleRecording() {
     if isRecording {
+      // A user stop always wins over automatic meeting behavior. The detector
+      // remains in its current session, so it will not immediately restart.
+      activeMeetingSessionID = nil
       Task { await stopRecording() }
     } else if canStart {
       Task { await startRecording() }
@@ -76,8 +92,27 @@ final class RecorderController {
   }
 
   func startRecording() async {
+    await startRecording(for: nil)
+  }
+
+  func recordDetectedMeeting() {
+    guard let meeting = detectedMeeting, canStart else { return }
+    meetingPromptHandler?(nil)
+    Task { await startRecording(for: meeting) }
+  }
+
+  func dismissDetectedMeeting() {
+    detectedMeeting = nil
+    meetingPromptHandler?(nil)
+  }
+
+  private func startRecording(for meeting: DetectedMeeting?) async {
     guard canStart else { return }
     dismissalTask?.cancel()
+    if meeting == nil {
+      detectedMeeting = nil
+      meetingPromptHandler?(nil)
+    }
     phase = .preparing
     elapsedSeconds = 0
     waveform = Array(repeating: 0.08, count: waveform.count)
@@ -105,12 +140,17 @@ final class RecorderController {
       activeRecordingID = id
       activeOutputURL = outputURL
       activeStartedAt = startedAt
+      activeMeetingSessionID = meeting?.id
+      if meeting != nil {
+        meetingPromptHandler?(nil)
+      }
       phase = .recording
       startElapsedTimer(from: startedAt)
     } catch {
       if let pendingOutputURL {
         try? FileManager.default.removeItem(at: pendingOutputURL)
       }
+      activeMeetingSessionID = nil
       showFailure(error.localizedDescription)
     }
   }
@@ -222,6 +262,58 @@ final class RecorderController {
         task.cancel()
       }
       NSApp.terminate(nil)
+    }
+  }
+
+  private func configureMeetingDetection(for mode: MeetingDetectionMode) {
+    switch mode {
+    case .off:
+      meetingDetector.stop()
+      detectedMeeting = nil
+      activeMeetingSessionID = nil
+      meetingPromptHandler?(nil)
+    case .ask:
+      meetingDetector.start()
+      if let detectedMeeting, canStart {
+        meetingPromptHandler?(detectedMeeting)
+      }
+    case .automatic:
+      meetingDetector.start()
+      meetingPromptHandler?(nil)
+      if let detectedMeeting, canStart {
+        Task { await startRecording(for: detectedMeeting) }
+      }
+    }
+  }
+
+  private func handleMeetingDetection(_ event: MeetingDetectionEvent) {
+    switch event {
+    case .started(let meeting):
+      guard settings.meetingDetectionMode != .off else { return }
+      detectedMeeting = meeting
+
+      switch settings.meetingDetectionMode {
+      case .off:
+        break
+      case .ask:
+        if canStart { meetingPromptHandler?(meeting) }
+      case .automatic:
+        if canStart {
+          Task { await startRecording(for: meeting) }
+        }
+      }
+
+    case .ended(let meeting):
+      if detectedMeeting?.id == meeting.id {
+        detectedMeeting = nil
+        meetingPromptHandler?(nil)
+      }
+
+      guard activeMeetingSessionID == meeting.id else { return }
+      activeMeetingSessionID = nil
+      if isRecording {
+        Task { await stopRecording() }
+      }
     }
   }
 
@@ -384,6 +476,7 @@ final class RecorderController {
     activeRecordingID = nil
     activeOutputURL = nil
     activeStartedAt = nil
+    activeMeetingSessionID = nil
   }
 
   private static func defaultTitle(for date: Date) -> String {

@@ -32,6 +32,16 @@ struct SettingsView: View {
       }
 
       Section("Recording") {
+        Picker("Google Meet detection", selection: $settings.meetingDetectionMode) {
+          ForEach(MeetingDetectionMode.allCases) { mode in
+            Text(mode.title).tag(mode)
+          }
+        }
+
+        Text(settings.meetingDetectionMode.description)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+
         Toggle(
           "Keep the floating capsule out of screen captures", isOn: $settings.hideCapsuleFromCapture
         )
@@ -44,6 +54,14 @@ struct SettingsView: View {
             openPrivacyPane("Privacy_ScreenCapture")
           }
         }
+      }
+
+      Section {
+        Text(
+          "Google Meet detection uses the same low-overhead macOS WebRTC and browser-audio signals as Plaud."
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
       }
     }
     .formStyle(.grouped)

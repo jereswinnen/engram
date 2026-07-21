@@ -17,7 +17,10 @@ keeps a recoverable local M4A, and uploads it directly to Engram.
 4. **Menu-bar experience — complete.** The app is an `LSUIElement` with no Dock icon,
    a global ⌘⇧R shortcut, an always-on-top draggable `NSPanel` capsule, a throttled
    live waveform, recent history, Settings, retry, Finder reveal, and Open in Engram.
-5. **Real-meeting validation — pending.** Sign the app with the intended Developer ID,
+5. **Google Meet detection — complete.** Like Plaud, the app watches macOS power
+   assertions for sustained WebRTC and browser-audio activity. It can ask before
+   recording or automatically start and stop with the browser meeting.
+6. **Real-meeting validation — pending.** Sign the app with the intended Developer ID,
    deploy the backend token, then compare several calls against Plaud before removing
    any Plaud code.
 
@@ -29,6 +32,8 @@ keeps a recoverable local M4A, and uploads it directly to Engram.
    is stored in Keychain.
 4. Start with the menu-bar control or ⌘⇧R. Grant Microphone and Screen & System Audio
    Recording access when macOS asks.
+5. In Settings, choose whether meeting detection is Off, asks before recording, or
+   records automatically. Ask before recording is the default.
 
 Local audio and history are stored inside the sandboxed Application Support container.
 Successful recordings are retained locally for now; failed uploads are never deleted.
@@ -65,6 +70,9 @@ your Apple development team in Xcode before distributing the app.
   change during recording.
 - Compare CPU, memory, battery use, channel balance, drift, and transcript quality with
   Plaud over several real meetings.
+- Verify meeting detection in Chrome and Safari while muted and unmuted. Confirm that
+  ordinary browser media does not trigger it, a manual stop does not immediately
+  restart, and leaving a meeting automatically stops only a meeting-started recording.
 
 The capsule's “keep out of screen captures” option uses the native window-sharing
 exclusion as a best effort. Screen-sharing applications can use different capture

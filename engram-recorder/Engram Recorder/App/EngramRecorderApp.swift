@@ -11,8 +11,8 @@ struct EngramRecorderApp: App {
       MenuBarView(controller: runtime.controller)
     } label: {
       Label(
-        runtime.controller.isRecording ? "Engram is recording" : "Engram Recorder",
-        systemImage: runtime.controller.isRecording ? "record.circle.fill" : "waveform"
+        menuBarTitle,
+        systemImage: menuBarSymbol
       )
     }
     .menuBarExtraStyle(.window)
@@ -22,6 +22,18 @@ struct EngramRecorderApp: App {
     }
     .defaultSize(width: 520, height: 360)
   }
+
+  private var menuBarTitle: String {
+    if runtime.controller.isRecording { return "Engram is recording" }
+    if let meeting = runtime.controller.detectedMeeting { return "\(meeting.title) detected" }
+    return "Engram Recorder"
+  }
+
+  private var menuBarSymbol: String {
+    if runtime.controller.isRecording { return "record.circle.fill" }
+    if runtime.controller.detectedMeeting != nil { return "video.fill" }
+    return "waveform"
+  }
 }
 
 @MainActor
@@ -29,16 +41,21 @@ struct EngramRecorderApp: App {
 final class AppRuntime {
   let controller: RecorderController
   private let panelController: CapsulePanelController
+  private let meetingPromptController: MeetingPromptPanelController
   private let hotKey: GlobalHotKey
 
   init() {
     let controller = RecorderController(settings: AppSettings())
     self.controller = controller
     panelController = CapsulePanelController(controller: controller)
+    meetingPromptController = MeetingPromptPanelController(controller: controller)
     hotKey = GlobalHotKey(keyCode: UInt32(kVK_ANSI_R), modifiers: [.command, .shift])
 
     controller.phaseHandler = { [weak panelController] phase in
       panelController?.update(for: phase)
+    }
+    controller.meetingPromptHandler = { [weak meetingPromptController] meeting in
+      meetingPromptController?.update(for: meeting)
     }
     hotKey.handler = { [weak controller] in
       controller?.toggleRecording()

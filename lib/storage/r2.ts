@@ -1,34 +1,88 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { Upload } from "@aws-sdk/lib-storage";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { config } from "@/lib/config";
-import type { Readable } from "node:stream";
-import type { Storage } from "./types";
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3"
+import { Upload } from "@aws-sdk/lib-storage"
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
+import { config } from "@/lib/config"
+import type { Readable } from "node:stream"
+import type { Storage } from "./types"
 
 export function createR2Storage(): Storage {
-  const r2 = config.r2();
+  const r2 = config.r2()
   const client = new S3Client({
     region: "auto",
     endpoint: r2.endpoint,
-    credentials: { accessKeyId: r2.accessKeyId, secretAccessKey: r2.secretAccessKey },
+    credentials: {
+      accessKeyId: r2.accessKeyId,
+      secretAccessKey: r2.secretAccessKey,
+    },
     forcePathStyle: true,
-  });
+  })
 
   return {
     async put(key, body, contentType) {
-      await client.send(new PutObjectCommand({ Bucket: r2.bucket, Key: key, Body: body, ContentType: contentType }));
+      await client.send(
+        new PutObjectCommand({
+          Bucket: r2.bucket,
+          Key: key,
+          Body: body,
+          ContentType: contentType,
+        })
+      )
+    },
+    async presignedPutUrl(key, contentType, ttlSeconds = 3600) {
+      return getSignedUrl(
+        client,
+        new PutObjectCommand({
+          Bucket: r2.bucket,
+          Key: key,
+          ContentType: contentType,
+        }),
+        { expiresIn: ttlSeconds }
+      )
     },
     async presignedGetUrl(key, ttlSeconds = 3600) {
-      return getSignedUrl(client, new GetObjectCommand({ Bucket: r2.bucket, Key: key }), { expiresIn: ttlSeconds });
+      return getSignedUrl(
+        client,
+        new GetObjectCommand({ Bucket: r2.bucket, Key: key }),
+        { expiresIn: ttlSeconds }
+      )
     },
     async putStream(key, body, contentType) {
       await new Upload({
         client,
-        params: { Bucket: r2.bucket, Key: key, Body: body as Readable, ContentType: contentType },
-      }).done();
+        params: {
+          Bucket: r2.bucket,
+          Key: key,
+          Body: body as Readable,
+          ContentType: contentType,
+        },
+      }).done()
+    },
+    async head(key) {
+      try {
+        const result = await client.send(
+          new HeadObjectCommand({ Bucket: r2.bucket, Key: key })
+        )
+        return {
+          size: result.ContentLength ?? 0,
+          ...(result.ContentType ? { contentType: result.ContentType } : {}),
+        }
+      } catch (error) {
+        const status = (error as { $metadata?: { httpStatusCode?: number } })
+          .$metadata?.httpStatusCode
+        if (status === 404) return null
+        throw error
+      }
     },
     async delete(key) {
-      await client.send(new DeleteObjectCommand({ Bucket: r2.bucket, Key: key }));
+      await client.send(
+        new DeleteObjectCommand({ Bucket: r2.bucket, Key: key })
+      )
     },
-  };
+  }
 }

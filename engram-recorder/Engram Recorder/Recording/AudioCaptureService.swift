@@ -181,7 +181,7 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
         AVFormatIDKey: kAudioFormatMPEG4AAC,
         AVSampleRateKey: 48_000,
         AVNumberOfChannelsKey: 2,
-        AVEncoderBitRateKey: 192_000,
+        AVEncoderBitRateKey: 96_000,
       ],
       commonFormat: .pcmFormatFloat32,
       interleaved: false

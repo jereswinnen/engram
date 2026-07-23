@@ -16,36 +16,59 @@ actor EngramAPIClient {
     serverURL: URL,
     token: String
   ) async throws -> UploadResult {
-    let endpoint =
-      serverURL
-      .appendingPathComponent("api", isDirectory: true)
-      .appendingPathComponent("recordings", isDirectory: false)
-    let boundary = "EngramBoundary-\(UUID().uuidString)"
-    let multipartURL = FileManager.default.temporaryDirectory
-      .appendingPathComponent("\(UUID().uuidString).multipart", isDirectory: false)
-    defer { try? FileManager.default.removeItem(at: multipartURL) }
+    let fileValues = try recording.audioURL.resourceValues(forKeys: [.fileSizeKey])
+    guard let byteCount = fileValues.fileSize, byteCount > 0 else {
+      throw APIError.emptyFile
+    }
 
-    try buildMultipartFile(
-      at: multipartURL,
-      boundary: boundary,
-      recording: recording
+    let initiateEndpoint =
+      recordingsEndpoint(serverURL: serverURL)
+      .appendingPathComponent("initiate", isDirectory: false)
+    let initiateBody = InitiateUploadBody(
+      id: recording.id.uuidString.lowercased(),
+      title: recording.title,
+      durationSeconds: recording.durationSeconds,
+      startedAt: ISO8601DateFormatter.engram.string(from: recording.startedAt),
+      byteCount: byteCount
     )
+    let initiateData = try await sendJSON(
+      initiateBody,
+      to: initiateEndpoint,
+      token: token
+    )
+    let initiation = try JSONDecoder().decode(InitiateUploadResponse.self, from: initiateData)
 
-    var request = URLRequest(url: endpoint)
-    request.httpMethod = "POST"
-    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-    request.setValue(
-      "multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+    if !initiation.completed, let upload = initiation.upload {
+      guard let uploadURL = URL(string: upload.url) else {
+        throw APIError.invalidResponse
+      }
+      var uploadRequest = URLRequest(url: uploadURL)
+      uploadRequest.httpMethod = "PUT"
+      for (name, value) in upload.headers {
+        uploadRequest.setValue(value, forHTTPHeaderField: name)
+      }
 
-    let (data, response) = try await session.upload(for: request, fromFile: multipartURL)
-    guard let http = response as? HTTPURLResponse else {
-      throw APIError.invalidResponse
+      let (data, response) = try await session.upload(
+        for: uploadRequest,
+        fromFile: recording.audioURL
+      )
+      try validate(response: response, data: data, service: "Audio storage")
     }
-    guard (200..<300).contains(http.statusCode) else {
-      let message = (try? JSONDecoder().decode(APIErrorBody.self, from: data).error)
-      throw APIError.server(status: http.statusCode, message: message)
+
+    if initiation.completed {
+      return UploadResult(id: initiation.id, url: initiation.url)
     }
-    return try JSONDecoder().decode(UploadResult.self, from: data)
+
+    let completeEndpoint =
+      recordingsEndpoint(serverURL: serverURL)
+      .appendingPathComponent(initiation.id, isDirectory: true)
+      .appendingPathComponent("complete", isDirectory: false)
+    let completeData = try await sendJSON(
+      CompleteUploadBody(byteCount: byteCount),
+      to: completeEndpoint,
+      token: token
+    )
+    return try JSONDecoder().decode(UploadResult.self, from: completeData)
   }
 
   func deleteRecording(
@@ -54,9 +77,7 @@ actor EngramAPIClient {
     token: String
   ) async throws {
     let endpoint =
-      serverURL
-      .appendingPathComponent("api", isDirectory: true)
-      .appendingPathComponent("recordings", isDirectory: true)
+      recordingsEndpoint(serverURL: serverURL)
       .appendingPathComponent(remoteID, isDirectory: false)
 
     var request = URLRequest(url: endpoint)
@@ -71,59 +92,69 @@ actor EngramAPIClient {
     if http.statusCode == 404 { return }
     guard (200..<300).contains(http.statusCode) else {
       let message = (try? JSONDecoder().decode(APIErrorBody.self, from: data).error)
-      throw APIError.server(status: http.statusCode, message: message)
+      throw APIError.server(service: "Engram", status: http.statusCode, message: message)
     }
   }
 
-  private func buildMultipartFile(
-    at destination: URL,
-    boundary: String,
-    recording: LocalRecording
+  private func recordingsEndpoint(serverURL: URL) -> URL {
+    serverURL
+      .appendingPathComponent("api", isDirectory: true)
+      .appendingPathComponent("recordings", isDirectory: true)
+  }
+
+  private func sendJSON<Body: Encodable>(
+    _ body: Body,
+    to endpoint: URL,
+    token: String
+  ) async throws -> Data {
+    var request = URLRequest(url: endpoint)
+    request.httpMethod = "POST"
+    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.httpBody = try JSONEncoder().encode(body)
+
+    let (data, response) = try await session.data(for: request)
+    try validate(response: response, data: data, service: "Engram")
+    return data
+  }
+
+  private func validate(
+    response: URLResponse,
+    data: Data,
+    service: String
   ) throws {
-    FileManager.default.createFile(atPath: destination.path, contents: nil)
-    let output = try FileHandle(forWritingTo: destination)
-    defer { try? output.close() }
-
-    try writeField("source", value: "mac", boundary: boundary, to: output)
-    try writeField("title", value: recording.title, boundary: boundary, to: output)
-    try writeField(
-      "durationSeconds",
-      value: String(recording.durationSeconds),
-      boundary: boundary,
-      to: output
-    )
-    try writeField(
-      "startedAt",
-      value: ISO8601DateFormatter.engram.string(from: recording.startedAt),
-      boundary: boundary,
-      to: output
-    )
-
-    let fileHeader =
-      "--\(boundary)\r\n"
-      + "Content-Disposition: form-data; name=\"file\"; filename=\"recording.m4a\"\r\n"
-      + "Content-Type: audio/mp4\r\n\r\n"
-    try output.write(contentsOf: Data(fileHeader.utf8))
-
-    let input = try FileHandle(forReadingFrom: recording.audioURL)
-    defer { try? input.close() }
-    while let chunk = try input.read(upToCount: 1_048_576), !chunk.isEmpty {
-      try output.write(contentsOf: chunk)
+    guard let http = response as? HTTPURLResponse else {
+      throw APIError.invalidResponse
     }
-    try output.write(contentsOf: Data("\r\n--\(boundary)--\r\n".utf8))
+    guard (200..<300).contains(http.statusCode) else {
+      let message = (try? JSONDecoder().decode(APIErrorBody.self, from: data).error)
+      throw APIError.server(service: service, status: http.statusCode, message: message)
+    }
+  }
+}
+
+private struct InitiateUploadBody: Encodable {
+  let id: String
+  let title: String
+  let durationSeconds: Int
+  let startedAt: String
+  let byteCount: Int
+}
+
+private struct CompleteUploadBody: Encodable {
+  let byteCount: Int
+}
+
+private struct InitiateUploadResponse: Decodable {
+  struct Upload: Decodable {
+    let url: String
+    let headers: [String: String]
   }
 
-  private func writeField(
-    _ name: String,
-    value: String,
-    boundary: String,
-    to output: FileHandle
-  ) throws {
-    let header =
-      "--\(boundary)\r\n" + "Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n"
-      + "\(value)\r\n"
-    try output.write(contentsOf: Data(header.utf8))
-  }
+  let id: String
+  let url: String
+  let completed: Bool
+  let upload: Upload?
 }
 
 private struct APIErrorBody: Decodable {
@@ -131,15 +162,18 @@ private struct APIErrorBody: Decodable {
 }
 
 private enum APIError: LocalizedError {
+  case emptyFile
   case invalidResponse
-  case server(status: Int, message: String?)
+  case server(service: String, status: Int, message: String?)
 
   var errorDescription: String? {
     switch self {
+    case .emptyFile:
+      "The local audio file is empty."
     case .invalidResponse:
       "Engram returned an invalid response."
-    case .server(let status, let message):
-      message ?? "Engram request failed with HTTP \(status)."
+    case .server(let service, let status, let message):
+      message ?? "\(service) request failed with HTTP \(status)."
     }
   }
 }

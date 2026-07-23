@@ -5,15 +5,16 @@ keeps a recoverable local M4A, and uploads it directly to Engram.
 
 ## Current phases
 
-1. **Engram ingestion — complete.** `POST /api/recordings` accepts the dedicated
-   recorder-specific bearer token and metadata.
+1. **Engram ingestion — complete.** The recorder uses its dedicated bearer token to
+   initialize an idempotent upload, sends audio directly to R2 with a short-lived
+   signed URL, and asks Engram to verify the stored byte count before processing.
 2. **Native recording core — complete.** `AVAudioEngine` captures the microphone,
    `ScreenCaptureKit` supplies system audio, and a dedicated mixer writes 48 kHz,
-   stereo, 192 kbps AAC to M4A.
+   stereo, 96 kbps AAC to M4A.
 3. **Recovery and upload — complete.** Recordings are finalized in Application
    Support before upload. History survives relaunches, interrupted uploads become
-   retryable, and multipart bodies are streamed through a temporary file rather than
-   held in memory.
+   retryable, retries reuse the local recording UUID, and a completed R2 object is
+   reused after an interruption instead of being uploaded twice.
 4. **Menu-bar experience — complete.** The app is an `LSUIElement` with no Dock icon,
    a global ⌘⇧R shortcut, an always-on-top draggable `NSPanel` capsule, a throttled
    live waveform, recent history, Settings, retry, Finder reveal, and Open in Engram.

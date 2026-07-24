@@ -10,6 +10,10 @@ vi.mock("@/auth", () => ({
   auth: { api: { getSession: vi.fn() } },
 }))
 
+vi.mock("@/lib/auth/connections", () => ({
+  ensureActivePrincipalConnection: vi.fn(async () => true),
+}))
+
 vi.mock("@/db", () => ({
   db: {
     insert: () => ({
@@ -64,6 +68,8 @@ beforeEach(async () => {
   calls.updates.length = 0
   calls.stored.length = 0
   process.env.MAC_RECORDER_API_TOKEN = "recorder-secret"
+  process.env.LEGACY_MAC_RECORDER_OWNER_ID = "user-1"
+  process.env.AUTH_LEGACY_MAC_ENABLED = "true"
   const { auth } = await import("@/auth")
   vi.mocked(auth.api.getSession).mockReset()
   vi.mocked(auth.api.getSession).mockResolvedValue(null)
@@ -93,6 +99,8 @@ describe("POST /api/recordings", () => {
       expect.objectContaining({
         title: "Weekly sync",
         source: "mac",
+        ownerId: "user-1",
+        createdByConnectionId: "00000000-0000-4000-8000-000000000001",
         durationSeconds: 125,
         createdAt: new Date("2026-07-10T08:30:00.000Z"),
         contentType: "audio/mp4",
@@ -108,9 +116,9 @@ describe("POST /api/recordings", () => {
       { storageKey: "audio/recording-1/meeting.m4a" },
     ])
     const { runTranscription, runEnhancement } = await import("@/lib/pipeline")
-    expect(runTranscription).toHaveBeenCalledWith("recording-1")
+    expect(runTranscription).toHaveBeenCalledWith("user-1", "recording-1")
     await vi.waitFor(() =>
-      expect(runEnhancement).toHaveBeenCalledWith("recording-1")
+      expect(runEnhancement).toHaveBeenCalledWith("user-1", "recording-1")
     )
   })
 
@@ -127,6 +135,7 @@ describe("POST /api/recordings", () => {
     expect(calls.inserts[0]).toMatchObject({
       title: "meeting.m4a",
       source: "upload",
+      ownerId: "user-1",
       durationSeconds: null,
     })
     expect(calls.inserts[0]).not.toHaveProperty("createdAt")

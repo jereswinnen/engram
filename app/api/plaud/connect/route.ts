@@ -1,15 +1,18 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
-import { beginAuth } from "@/lib/plaud/mcp/client";
+import { NextRequest, NextResponse } from "next/server"
+import { beginAuth } from "@/lib/plaud/mcp/client"
+import { isAuthFailure, requirePrincipal } from "@/lib/auth/policy"
 
 export async function GET(request: NextRequest) {
-  const session = await auth.api.getSession({ headers: request.headers });
-  if (!session) return NextResponse.redirect(new URL("/login", request.url));
+  const principal = await requirePrincipal(request, {
+    scopes: ["plaud:write"],
+    mechanisms: ["session"],
+  })
+  if (isAuthFailure(principal)) return principal
   try {
-    const url = await beginAuth();
-    return NextResponse.redirect(url);
+    const url = await beginAuth(principal.userId)
+    return NextResponse.redirect(url)
   } catch (e) {
-    console.error("[plaud oauth]", e);
-    return NextResponse.redirect(new URL("/settings?plaud=error", request.url));
+    console.error("[plaud oauth]", e)
+    return NextResponse.redirect(new URL("/settings?plaud=error", request.url))
   }
 }

@@ -1,18 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/auth"
 import { syncPlaud } from "@/lib/plaud/sync"
+import { isAuthFailure, requirePrincipal } from "@/lib/auth/policy"
 
 // Plaud sync is now a manual, browser-only fallback. The retired Railway cron
 // no longer has a bearer-token path into this endpoint.
-export async function isAuthorized(request: Request): Promise<boolean> {
-  const session = await auth.api.getSession({ headers: request.headers })
-  return Boolean(session)
-}
-
 export async function POST(request: NextRequest) {
-  if (!(await isAuthorized(request))) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-  const result = await syncPlaud()
+  const principal = await requirePrincipal(request, {
+    scopes: ["plaud:write"],
+    mechanisms: ["session"],
+  })
+  if (isAuthFailure(principal)) return principal
+  const result = await syncPlaud(principal.userId)
   return NextResponse.json(result)
 }

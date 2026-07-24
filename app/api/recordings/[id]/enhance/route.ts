@@ -1,15 +1,22 @@
-import { NextRequest, NextResponse } from "next/server";
-import { runEnhancement } from "@/lib/pipeline";
-import { auth } from "@/auth";
+import { NextRequest, NextResponse } from "next/server"
+import { runEnhancement } from "@/lib/pipeline"
+import { isAuthFailure, requirePrincipal } from "@/lib/auth/policy"
+import { getOwnedRecording } from "@/lib/recordings/store"
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth.api.getSession({ headers: req.headers });
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const principal = await requirePrincipal(req, {
+    scopes: ["recordings:write"],
+    mechanisms: ["session"],
+  })
+  if (isAuthFailure(principal)) return principal
 
-  const { id } = await params;
-  await runEnhancement(id);
-  return NextResponse.json({ ok: true });
+  const { id } = await params
+  if (!(await getOwnedRecording(principal.userId, id))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+  await runEnhancement(principal.userId, id)
+  return NextResponse.json({ ok: true })
 }

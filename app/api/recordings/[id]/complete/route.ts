@@ -3,8 +3,13 @@ import { and, eq } from "drizzle-orm"
 import { db } from "@/db"
 import { recordings } from "@/db/schema"
 import { runEnhancement, runTranscription } from "@/lib/pipeline"
-import { authorizeRecordingRequest } from "@/lib/recordings/auth"
+import { isAuthFailure, requirePrincipal } from "@/lib/auth/policy"
 import { isDirectUploadID } from "@/lib/recordings/direct-upload"
+import {
+  getOwnedRecording,
+  ownedRecordingWhere,
+  recordingBelongsToConnection,
+} from "@/lib/recordings/store"
 import { getStorage } from "@/lib/storage"
 
 type RouteContext = { params: Promise<{ id: string }> }
@@ -20,9 +25,11 @@ function parseByteCount(value: unknown): number | null {
 }
 
 export async function POST(request: Request, context: RouteContext) {
-  if ((await authorizeRecordingRequest(request)) !== "recorder") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const principal = await requirePrincipal(request, {
+    scopes: ["recordings:write"],
+    mechanisms: ["legacy-mac", "oauth"],
+  })
+  if (isAuthFailure(principal)) return principal
 
   let body: unknown
   try {
@@ -48,14 +55,9 @@ export async function POST(request: Request, context: RouteContext) {
       { status: 400 }
     )
   }
-  const recording = await db.query.recordings.findFirst({
-    where: eq(recordings.id, id),
-  })
-  if (!recording) {
+  const recording = await getOwnedRecording(principal.userId, id)
+  if (!recording || !recordingBelongsToConnection(recording, principal)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
-  }
-  if (recording.source !== "mac") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
   const result = { id: recording.id, url: `/recordings/${recording.id}` }
@@ -82,15 +84,15 @@ export async function POST(request: Request, context: RouteContext) {
     .set({ status: "uploaded", errorMessage: null })
     .where(
       and(
-        eq(recordings.id, recording.id),
+        ownedRecordingWhere(principal.userId, recording.id),
         eq(recordings.status, "pending_upload")
       )
     )
     .returning({ id: recordings.id })
 
   if (transitioned.length > 0) {
-    runTranscription(recording.id)
-      .then(() => runEnhancement(recording.id))
+    runTranscription(principal.userId, recording.id)
+      .then(() => runEnhancement(principal.userId, recording.id))
       .catch(() => {})
   }
 

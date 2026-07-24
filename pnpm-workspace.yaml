@@ -1,6 +1,10 @@
 packages: []
 
+overrides:
+  '@better-auth/core': 1.6.20
+
 allowBuilds:
   sharp: true
   unrs-resolver: true
   msw: false
+  esbuild: false

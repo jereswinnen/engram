@@ -71,6 +71,13 @@
       "when": 1782245448574,
       "tag": "0009_brave_nightcrawler",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784889218422,
+      "tag": "0010_round_obadiah_stane",
+      "breakpoints": true
     }
   ]
 }

@@ -12,6 +12,10 @@ vi.mock("@/auth", () => ({
   auth: { api: { getSession: mocks.getSession } },
 }))
 
+vi.mock("@/lib/auth/connections", () => ({
+  ensureActivePrincipalConnection: vi.fn(async () => true),
+}))
+
 vi.mock("@/db", () => ({
   db: {
     query: { recordings: { findFirst: mocks.findRecording } },
@@ -38,10 +42,14 @@ function request(id = "recording-1", headers: Record<string, string> = {}) {
 beforeEach(() => {
   vi.clearAllMocks()
   process.env.MAC_RECORDER_API_TOKEN = "recorder-secret"
+  process.env.LEGACY_MAC_RECORDER_OWNER_ID = "user-1"
+  process.env.AUTH_LEGACY_MAC_ENABLED = "true"
   mocks.getSession.mockResolvedValue({ user: { id: "user-1" } })
   mocks.findRecording.mockResolvedValue({
     id: "recording-1",
     source: "mac",
+    ownerId: "user-1",
+    createdByConnectionId: "00000000-0000-4000-8000-000000000001",
     storageKey: "audio/recording-1.m4a",
   })
   mocks.deleteObject.mockResolvedValue(undefined)
@@ -50,6 +58,8 @@ beforeEach(() => {
 
 afterEach(() => {
   delete process.env.MAC_RECORDER_API_TOKEN
+  delete process.env.LEGACY_MAC_RECORDER_OWNER_ID
+  delete process.env.AUTH_LEGACY_MAC_ENABLED
 })
 
 describe("DELETE /api/recordings/[id]", () => {
@@ -80,6 +90,8 @@ describe("DELETE /api/recordings/[id]", () => {
     mocks.findRecording.mockResolvedValue({
       id: "recording-1",
       source: "upload",
+      ownerId: "user-1",
+      createdByConnectionId: null,
       storageKey: "audio/recording-1.m4a",
     })
     const { request: req, context } = request("recording-1", {
@@ -88,7 +100,7 @@ describe("DELETE /api/recordings/[id]", () => {
 
     const response = await DELETE(req, context)
 
-    expect(response.status).toBe(403)
+    expect(response.status).toBe(404)
     expect(mocks.deleteObject).not.toHaveBeenCalled()
     expect(mocks.deleteWhere).not.toHaveBeenCalled()
   })

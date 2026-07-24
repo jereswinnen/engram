@@ -1,17 +1,22 @@
 import { NextResponse } from "next/server"
-import { eq } from "drizzle-orm"
 import { db } from "@/db"
 import { recordings } from "@/db/schema"
-import { authorizeRecordingRequest } from "@/lib/recordings/auth"
+import { isAuthFailure, requirePrincipal } from "@/lib/auth/policy"
 import { parseDirectUploadRequest } from "@/lib/recordings/direct-upload"
+import {
+  getOwnedRecording,
+  recordingBelongsToConnection,
+} from "@/lib/recordings/store"
 import { buildAudioKey, getStorage } from "@/lib/storage"
 
 const CONTENT_TYPE = "audio/mp4"
 
 export async function POST(request: Request) {
-  if ((await authorizeRecordingRequest(request)) !== "recorder") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const principal = await requirePrincipal(request, {
+    scopes: ["recordings:write"],
+    mechanisms: ["legacy-mac", "oauth"],
+  })
+  if (isAuthFailure(principal)) return principal
 
   const parsed = await parseDirectUploadRequest(request)
   if ("error" in parsed) {
@@ -20,15 +25,15 @@ export async function POST(request: Request) {
 
   const { id, title, durationSeconds, startedAt, byteCount } = parsed.input
   const storageKey = buildAudioKey(id, "recording.m4a")
-  let recording = await db.query.recordings.findFirst({
-    where: eq(recordings.id, id),
-  })
+  let recording = await getOwnedRecording(principal.userId, id)
 
   if (!recording) {
     const inserted = await db
       .insert(recordings)
       .values({
         id,
+        ownerId: principal.userId,
+        createdByConnectionId: principal.connectionId,
         title,
         source: "mac",
         storageKey,
@@ -40,20 +45,16 @@ export async function POST(request: Request) {
       .onConflictDoNothing({ target: recordings.id })
       .returning()
 
-    recording =
-      inserted[0] ??
-      (await db.query.recordings.findFirst({
-        where: eq(recordings.id, id),
-      }))
+    recording = inserted[0] ?? (await getOwnedRecording(principal.userId, id))
   }
 
   if (!recording) {
     return NextResponse.json(
-      { error: "Could not initialize the upload" },
-      { status: 500 }
+      { error: "Recording ID is already in use" },
+      { status: 409 }
     )
   }
-  if (recording.source !== "mac") {
+  if (!recordingBelongsToConnection(recording, principal)) {
     return NextResponse.json(
       { error: "Recording ID is already in use" },
       { status: 409 }

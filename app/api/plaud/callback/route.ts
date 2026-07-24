@@ -1,17 +1,24 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
-import { finishAuth } from "@/lib/plaud/mcp/client";
+import { NextRequest, NextResponse } from "next/server"
+import { finishAuth } from "@/lib/plaud/mcp/client"
+import { isAuthFailure, requirePrincipal } from "@/lib/auth/policy"
 
 export async function GET(request: NextRequest) {
-  const session = await auth.api.getSession({ headers: request.headers });
-  if (!session) return NextResponse.redirect(new URL("/login", request.url));
-  const code = request.nextUrl.searchParams.get("code");
-  if (!code) return NextResponse.redirect(new URL("/settings?plaud=error", request.url));
+  const principal = await requirePrincipal(request, {
+    scopes: ["plaud:write"],
+    mechanisms: ["session"],
+  })
+  if (isAuthFailure(principal)) return principal
+  const code = request.nextUrl.searchParams.get("code")
+  const state = request.nextUrl.searchParams.get("state")
+  if (!code || !state)
+    return NextResponse.redirect(new URL("/settings?plaud=error", request.url))
   try {
-    await finishAuth(code);
-    return NextResponse.redirect(new URL("/settings?plaud=connected", request.url));
+    await finishAuth(principal.userId, code, state)
+    return NextResponse.redirect(
+      new URL("/settings?plaud=connected", request.url)
+    )
   } catch (e) {
-    console.error("[plaud oauth]", e);
-    return NextResponse.redirect(new URL("/settings?plaud=error", request.url));
+    console.error("[plaud oauth]", e)
+    return NextResponse.redirect(new URL("/settings?plaud=error", request.url))
   }
 }

@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const state = vi.hoisted(() => ({
-  authorization: "recorder" as "recorder" | "session" | null,
   recording: null as Record<string, unknown> | null,
   inserts: [] as Record<string, unknown>[],
   updates: [] as Record<string, unknown>[],
@@ -11,15 +10,13 @@ const state = vi.hoisted(() => ({
   runEnhancement: vi.fn(),
 }))
 
-vi.mock("@/lib/recordings/auth", () => ({
-  authorizeRecordingRequest: vi.fn(async () => state.authorization),
-}))
-
 vi.mock("@/db", () => ({
   db: {
     query: {
       recordings: {
-        findFirst: vi.fn(async () => state.recording),
+        findFirst: vi.fn(async () =>
+          state.recording?.ownerId === "user-1" ? state.recording : null
+        ),
       },
     },
     insert: () => ({
@@ -47,6 +44,10 @@ vi.mock("@/db", () => ({
       }),
     }),
   },
+}))
+
+vi.mock("@/lib/auth/connections", () => ({
+  ensureActivePrincipalConnection: vi.fn(async () => true),
 }))
 
 vi.mock("@/lib/storage", () => ({
@@ -104,7 +105,6 @@ function completeRequest(byteCount = 17_757_683) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  state.authorization = "recorder"
   state.recording = null
   state.inserts.length = 0
   state.updates.length = 0
@@ -112,6 +112,9 @@ beforeEach(() => {
   state.presignedPutUrl.mockResolvedValue("https://r2.example/upload")
   state.runTranscription.mockResolvedValue(undefined)
   state.runEnhancement.mockResolvedValue(undefined)
+  process.env.MAC_RECORDER_API_TOKEN = "recorder-secret"
+  process.env.LEGACY_MAC_RECORDER_OWNER_ID = "user-1"
+  process.env.AUTH_LEGACY_MAC_ENABLED = "true"
 })
 
 describe("POST /api/recordings/initiate", () => {
@@ -132,6 +135,8 @@ describe("POST /api/recordings/initiate", () => {
       expect.objectContaining({
         id: recordingID,
         source: "mac",
+        ownerId: "user-1",
+        createdByConnectionId: "00000000-0000-4000-8000-000000000001",
         storageKey: `audio/${recordingID}.m4a`,
         status: "pending_upload",
         durationSeconds: 947,
@@ -153,6 +158,8 @@ describe("POST /api/recordings/initiate", () => {
       source: "mac",
       storageKey: `audio/${recordingID}.m4a`,
       status: "pending_upload",
+      ownerId: "user-1",
+      createdByConnectionId: "00000000-0000-4000-8000-000000000001",
     }
     state.head.mockResolvedValue({ size: 17_757_683 })
 
@@ -171,6 +178,8 @@ describe("POST /api/recordings/initiate", () => {
       source: "mac",
       storageKey: `audio/${recordingID}.m4a`,
       status: "transcribing",
+      ownerId: "user-1",
+      createdByConnectionId: "00000000-0000-4000-8000-000000000001",
     }
 
     const response = await initiateUpload(initiateRequest())
@@ -183,8 +192,28 @@ describe("POST /api/recordings/initiate", () => {
     expect(state.head).not.toHaveBeenCalled()
   })
 
+  it("does not disclose or presign a UUID already owned by another user", async () => {
+    state.recording = {
+      id: recordingID,
+      source: "mac",
+      storageKey: `audio/${recordingID}.m4a`,
+      status: "pending_upload",
+      ownerId: "user-b",
+      createdByConnectionId: "10000000-0000-4000-8000-000000000001",
+    }
+
+    const response = await initiateUpload(initiateRequest())
+
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({
+      error: "Recording ID is already in use",
+    })
+    expect(state.presignedPutUrl).not.toHaveBeenCalled()
+    expect(state.head).not.toHaveBeenCalled()
+  })
+
   it("requires the dedicated recorder token", async () => {
-    state.authorization = "session"
+    delete process.env.MAC_RECORDER_API_TOKEN
 
     const response = await initiateUpload(initiateRequest())
 
@@ -209,6 +238,8 @@ describe("POST /api/recordings/[id]/complete", () => {
       source: "mac",
       storageKey: `audio/${recordingID}.m4a`,
       status: "pending_upload",
+      ownerId: "user-1",
+      createdByConnectionId: "00000000-0000-4000-8000-000000000001",
     }
     state.head.mockResolvedValue({ size: 17_757_683 })
   })
@@ -227,9 +258,9 @@ describe("POST /api/recordings/[id]/complete", () => {
     })
     expect(state.updates).toEqual([{ status: "uploaded", errorMessage: null }])
     expect(state.runTranscription).toHaveBeenCalledTimes(1)
-    expect(state.runTranscription).toHaveBeenCalledWith(recordingID)
+    expect(state.runTranscription).toHaveBeenCalledWith("user-1", recordingID)
     await vi.waitFor(() =>
-      expect(state.runEnhancement).toHaveBeenCalledWith(recordingID)
+      expect(state.runEnhancement).toHaveBeenCalledWith("user-1", recordingID)
     )
   })
 
@@ -245,6 +276,24 @@ describe("POST /api/recordings/[id]/complete", () => {
     })
     expect(state.updates).toHaveLength(0)
     expect(state.runTranscription).not.toHaveBeenCalled()
+  })
+
+  it("returns 404 before storage access for another owner's recording", async () => {
+    state.recording = {
+      id: recordingID,
+      source: "mac",
+      storageKey: `audio/${recordingID}.m4a`,
+      status: "pending_upload",
+      ownerId: "user-b",
+      createdByConnectionId: "10000000-0000-4000-8000-000000000001",
+    }
+    const { request, context } = completeRequest()
+
+    const response = await completeUpload(request, context)
+
+    expect(response.status).toBe(404)
+    expect(state.head).not.toHaveBeenCalled()
+    expect(state.updates).toHaveLength(0)
   })
 
   it("rejects completion when no uploaded object exists", async () => {

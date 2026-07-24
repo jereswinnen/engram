@@ -63,6 +63,15 @@ NEXT_PUBLIC_APP_URL=https://<your-service>.up.railway.app
 
 # Native macOS recorder upload authorization — 64 hex chars
 MAC_RECORDER_API_TOKEN=<64 hex chars>
+
+# Ownership release A — select an existing Better Auth user, never a guessed row
+LEGACY_MAC_RECORDER_OWNER_ID=<existing user.id selected by the audit>
+AUTH_LEGACY_MAC_ENABLED=true
+AUTH_ALLOW_UNOWNED_LEGACY_DATA=true
+
+# Keep future auth surfaces off until their phase gates are complete
+AUTH_OAUTH_BEARER_ENABLED=false
+MCP_ENABLED=false
 ```
 
 > **Note:** `BETTER_AUTH_URL` and `NEXT_PUBLIC_APP_URL` must be the same Railway public
@@ -105,6 +114,66 @@ You do not need to run migrations manually — Railway runs them automatically.
 > ```bash
 > pnpm db:migrate
 > ```
+
+### Ownership release A: audited backfill (migration 0010)
+
+This release is deliberately additive. Migration `0010_round_obadiah_stane.sql`
+adds nullable ownership columns and new tables; it does not drop, delete, truncate,
+or make existing owner columns non-null.
+
+Before deploying the owner-aware application:
+
+1. Create a restorable Railway Postgres backup/snapshot and record its identifier.
+2. Run the read-only preflight and save its output:
+
+   ```bash
+   psql "$DATABASE_URL" -f scripts/audit-auth-ownership-before.sql
+   ```
+
+3. Select the one existing Better Auth account that owns the current corpus. Record
+   both its `user.id` and email. If this is ambiguous, stop; do not guess or use
+   `LIMIT 1`.
+4. Set `LEGACY_MAC_RECORDER_OWNER_ID` to that exact ID and temporarily set
+   `AUTH_ALLOW_UNOWNED_LEGACY_DATA=true`. This keeps the canonical owner able to
+   see old nullable rows during the rollback window. No other user can see them.
+5. Deploy. Railway applies migration 0010 before starting the new container. The
+   application lazily creates the same fixed synthetic legacy-Mac connection before
+   accepting a native write, so an upload in the brief pre-backfill window is still
+   owned and attributable.
+6. From a Railway one-off shell, run the transactional backfill with the recorded
+   ID and email:
+
+   ```bash
+   psql "$DATABASE_URL" \
+     -v owner_id='<recorded user.id>' \
+     -v owner_email='you@example.com' \
+     -f scripts/backfill-auth-ownership.sql
+   ```
+
+   The script fails closed if the ID/email pair does not identify exactly one existing user,
+   if normalized speaker names would collide, or if its final ownership/connection
+   audit fails. It briefly locks the affected tables against concurrent writes, and
+   any failure rolls back the entire transaction. It never merges or
+   deletes rows.
+   Existing rows whose `source` is `mac` are attributed to the synthetic legacy
+   connection as inferred migration provenance; `source` was historically
+   client-supplied, so save and review the preflight source counts first.
+7. Run and save the post-backfill audit. Every null/orphan/invalid-attribution count
+   must be zero:
+
+   ```bash
+   psql "$DATABASE_URL" -f scripts/audit-auth-ownership-after.sql
+   ```
+
+8. Verify the existing user and a separately seeded second user as described in the
+   unified-auth plan. After the soak window, set
+   `AUTH_ALLOW_UNOWNED_LEGACY_DATA=false`. Keep `AUTH_LEGACY_MAC_ENABLED=true` until
+   the OAuth Mac release has shipped and soaked.
+
+If the application is rolled back to an owner-unaware version, keep the nullable
+schema. Before returning to owner-aware code, stop writes, rerun the transactional
+backfill and post-audit to repair any null-owned rows created during the rollback.
+Do not apply Phase 1B non-null/removal constraints until that rollback window closes.
 
 ---
 

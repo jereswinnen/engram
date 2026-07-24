@@ -1,19 +1,31 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
-import { createBackup, getBackups, markError } from "@/lib/backup/store";
-import { buildBackup } from "@/lib/backup/build";
+import { NextRequest, NextResponse } from "next/server"
+import { createBackup, getBackups, markError } from "@/lib/backup/store"
+import { buildBackup } from "@/lib/backup/build"
+import { isAuthFailure, requirePrincipal } from "@/lib/auth/policy"
 
 export async function GET(request: NextRequest) {
-  const session = await auth.api.getSession({ headers: request.headers });
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  return NextResponse.json(await getBackups());
+  const principal = await requirePrincipal(request, {
+    scopes: ["backups:read"],
+    mechanisms: ["session"],
+  })
+  if (isAuthFailure(principal)) return principal
+  return NextResponse.json(await getBackups(principal.userId))
 }
 
 export async function POST(request: NextRequest) {
-  const session = await auth.api.getSession({ headers: request.headers });
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const backup = await createBackup();
+  const principal = await requirePrincipal(request, {
+    scopes: ["backups:write"],
+    mechanisms: ["session"],
+  })
+  if (isAuthFailure(principal)) return principal
+  const backup = await createBackup(principal.userId)
   // fire-and-forget; outer catch ensures the row never stays stuck pending on a thrown error
-  buildBackup(backup.id).catch((e) => markError(backup.id, e instanceof Error ? e.message : String(e)));
-  return NextResponse.json({ id: backup.id }, { status: 201 });
+  buildBackup(principal.userId, backup.id).catch((e) =>
+    markError(
+      principal.userId,
+      backup.id,
+      e instanceof Error ? e.message : String(e)
+    )
+  )
+  return NextResponse.json({ id: backup.id }, { status: 201 })
 }

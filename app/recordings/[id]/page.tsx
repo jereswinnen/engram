@@ -1,8 +1,5 @@
-import { eq, desc } from "drizzle-orm"
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { db } from "@/db"
-import { recordings, transcriptions, aiEnhancements } from "@/db/schema"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import RetryButton from "./retry-button"
 import RegenerateButton from "./regenerate-button"
@@ -11,6 +8,7 @@ import { TranscriptPlayer } from "./transcript-player"
 import { ExportButtons } from "./export-buttons"
 import { DeleteRecordingButton } from "./delete-recording-button"
 import { getRecordingSpeakerMap, listSpeakers } from "@/lib/speakers/store"
+import { getOwnedRecordingBundle } from "@/lib/recordings/store"
 
 function Section({
   title,
@@ -34,27 +32,19 @@ export default async function RecordingPage({
   params: Promise<{ id: string }>
   searchParams: Promise<{ q?: string }>
 }) {
-  await requireSession()
+  const session = await requireSession()
 
   const { id } = await params
   const { q } = await searchParams
 
-  const [recording, transcription, enhancement, speakerMap, speakerDirectory] =
-    await Promise.all([
-      db.query.recordings.findFirst({ where: eq(recordings.id, id) }),
-      db.query.transcriptions.findFirst({
-        where: eq(transcriptions.recordingId, id),
-        orderBy: [desc(transcriptions.createdAt)],
-      }),
-      db.query.aiEnhancements.findFirst({
-        where: eq(aiEnhancements.recordingId, id),
-        orderBy: [desc(aiEnhancements.createdAt)],
-      }),
-      getRecordingSpeakerMap(id),
-      listSpeakers(),
-    ])
+  const [bundle, speakerMap, speakerDirectory] = await Promise.all([
+    getOwnedRecordingBundle(session.user.id, id),
+    getRecordingSpeakerMap(session.user.id, id),
+    listSpeakers(session.user.id),
+  ])
 
-  if (!recording) notFound()
+  if (!bundle) notFound()
+  const { recording, transcription, enhancement } = bundle
 
   const isDone = recording.status === "done"
   const isError = recording.status === "error"

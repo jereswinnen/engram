@@ -1,10 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
-import { disconnect } from "@/lib/plaud/mcp/client";
+import { NextRequest, NextResponse } from "next/server"
+import { disconnect } from "@/lib/plaud/mcp/client"
+import { isAuthFailure, requirePrincipal } from "@/lib/auth/policy"
 
 export async function POST(request: NextRequest) {
-  const session = await auth.api.getSession({ headers: request.headers });
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  await disconnect();
-  return NextResponse.json({ connected: false });
+  const principal = await requirePrincipal(request, {
+    scopes: ["plaud:write"],
+    mechanisms: ["session"],
+  })
+  if (isAuthFailure(principal)) return principal
+  await disconnect(principal.userId)
+  return NextResponse.json({ connected: false })
 }

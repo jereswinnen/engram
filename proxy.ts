@@ -19,6 +19,7 @@ export function proxy(request: NextRequest) {
     pathname === "/login" ||
     pathname === "/api/recordings" ||
     pathname === "/api/recordings/initiate" ||
+    /^\/api\/recordings\/[^/]+$/.test(pathname) ||
     /^\/api\/recordings\/[^/]+\/complete$/.test(pathname)
   ) {
     return NextResponse.next()

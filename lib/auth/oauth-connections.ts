@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto"
+import { AsyncLocalStorage } from "node:async_hooks"
 import { and, eq } from "drizzle-orm"
 import { APIError } from "better-auth"
 import { db } from "@/db"
@@ -6,6 +7,17 @@ import { authConnections, oauthClient } from "@/db/schema"
 import { oauthGrantMatchesClient } from "./oauth-config"
 
 type OAuthUser = { id: string }
+type OAuthSession = { id: string }
+
+type PendingConnectionContext = {
+  connectionId: string
+  ownerId: string
+  sessionId: string
+  scopeKey: string
+}
+
+const pendingConnectionContext =
+  new AsyncLocalStorage<PendingConnectionContext>()
 
 type AuthorizationCodeVerification = {
   query: { client_id: string }
@@ -15,9 +27,26 @@ type AuthorizationCodeVerification = {
 
 export async function createPendingOAuthConnection(input: {
   user: OAuthUser
+  session: OAuthSession
   scopes: readonly string[]
 }): Promise<string> {
+  const scopeKey = [...input.scopes].sort().join(" ")
+  const existing = pendingConnectionContext.getStore()
+  if (
+    existing?.ownerId === input.user.id &&
+    existing.sessionId === input.session.id &&
+    existing.scopeKey === scopeKey
+  ) {
+    return existing.connectionId
+  }
+
   const connectionId = randomUUID()
+  pendingConnectionContext.enterWith({
+    connectionId,
+    ownerId: input.user.id,
+    sessionId: input.session.id,
+    scopeKey,
+  })
   await db.insert(authConnections).values({
     id: connectionId,
     ownerId: input.user.id,

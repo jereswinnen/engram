@@ -1,7 +1,7 @@
 # Engram Unified Authentication Implementation Plan
 
 **Date:** 2026-07-24
-**Status:** Phase 0 complete; Phase 1A deployed and audited; Phase 2 server foundation implemented behind a disabled production flag; staging lifecycle gate pending
+**Status:** Phase 0 complete; Phase 1A deployed and audited; Phase 2 server foundation and isolated local lifecycle gate complete behind a disabled production flag; Phase 3 ready
 **Authority:** This is the source of truth for Engram authentication work until it is superseded by a newer dated plan.
 
 ## Goal
@@ -483,16 +483,29 @@ test: cover cross-owner authorization boundaries
 - OAuth discovery, provider endpoints, consent, and bearer acceptance all remain
   gated by `AUTH_OAUTH_BEARER_ENABLED`; production remains `false` during the
   staging gate. Existing web sessions and the legacy Mac token remain available.
-- The automated suite passes 194 tests across 44 files. The security contract
+- The automated suite passes 195 tests across 45 files. The security contract
   covers exact redirect handling, PKCE failure, code replay, signed consent-query
   tampering, audience separation, scope challenges, DCR scope/URL rejection,
   refresh rotation/revocation, and signing-key overlap/retirement.
 - TypeScript, the Next.js production build, and the unsigned macOS Debug regression
   build pass. No Phase 2 migration or client provisioning command has been run
   against production yet.
-- Remaining gate: deploy dark to staging, provision the Mac client there, enable
-  OAuth in staging, and perform a real browser login/code/refresh/API/revoke flow.
-  Keep production OAuth disabled until that succeeds.
+- Because the project has no paid Railway staging environment, the server gate ran
+  against an isolated PostgreSQL 17 Docker container bound only to localhost. It
+  used the complete migration chain, a synthetic `engram.invalid` user, and no
+  production dump or identity data.
+- The local gate passed discovery, browser sign-in, Mac Authorization Code + PKCE,
+  API access, refresh rotation, self-revocation, and rejection of both the revoked
+  access and refresh credentials. It also passed MCP dynamic registration,
+  transcript-read consent disclosure, MCP audience isolation from REST, standard
+  revocation, and rejected refresh after revocation.
+- That lifecycle test exposed and fixed a consent loop: the provider requests its
+  consent reference twice during one authorization request. The reference is now
+  stable within that request and covered by a regression test.
+- Production was not changed: no Phase 2 migration or client provisioning command
+  ran there, and OAuth and MCP remain disabled. A public dark deployment remains a
+  pre-production rollout check, but it does not block starting the Phase 3 Mac
+  client implementation against the isolated local server.
 
 ### Verification
 

@@ -85,8 +85,8 @@ export const auth = betterAuth({
       postLogin: {
         page: "/oauth/continue",
         shouldRedirect: () => false,
-        consentReferenceId: ({ user, scopes }) =>
-          createPendingOAuthConnection({ user, scopes }),
+        consentReferenceId: ({ user, session, scopes }) =>
+          createPendingOAuthConnection({ user, session, scopes }),
       },
       customTokenResponseFields: async ({
         user,

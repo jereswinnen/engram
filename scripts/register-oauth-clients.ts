@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto"
+import { resolve } from "node:path"
 import { pathToFileURL } from "node:url"
 import { eq } from "drizzle-orm"
 import { db } from "@/db"
@@ -59,7 +60,7 @@ export async function provisionOAuthClients(): Promise<"created" | "updated"> {
 
 if (
   process.argv[1] &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
+  import.meta.url === pathToFileURL(resolve(process.argv[1])).href
 ) {
   const result = await provisionOAuthClients()
   console.info(`${ENGRAM_MAC_CLIENT_ID}: ${result}`)

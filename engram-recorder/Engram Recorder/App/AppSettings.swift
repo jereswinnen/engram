@@ -12,17 +12,9 @@ final class AppSettings {
   }
 
   var serverURLString: String {
-    didSet { defaults.set(serverURLString, forKey: Keys.serverURL) }
-  }
-
-  var apiToken: String {
     didSet {
-      do {
-        try KeychainStore.saveToken(apiToken.trimmingCharacters(in: .whitespacesAndNewlines))
-        tokenSaveError = nil
-      } catch {
-        tokenSaveError = error.localizedDescription
-      }
+      defaults.set(serverURLString, forKey: Keys.serverURL)
+      refreshAuthentication()
     }
   }
 
@@ -39,17 +31,30 @@ final class AppSettings {
 
   var meetingDetectionModeChanged: ((MeetingDetectionMode) -> Void)?
 
-  private(set) var tokenSaveError: String?
+  private(set) var authAccount: EngramAccount?
+  private(set) var authenticationError: String?
+  private(set) var isAuthenticating = false
+  private(set) var revocationFailed = false
+  let authSession: EngramAuthSession
   private let defaults: UserDefaults
 
-  init(defaults: UserDefaults = .standard) {
+  init(
+    defaults: UserDefaults = .standard,
+    authSession: EngramAuthSession = EngramAuthSession()
+  ) {
     self.defaults = defaults
+    self.authSession = authSession
     serverURLString = defaults.string(forKey: Keys.serverURL) ?? ""
-    apiToken = KeychainStore.readToken()
+    authAccount = nil
+    authenticationError = nil
+    isAuthenticating = false
+    revocationFailed = false
     hideCapsuleFromCapture = defaults.object(forKey: Keys.hideFromCapture) as? Bool ?? true
-    meetingDetectionMode = MeetingDetectionMode(
-      rawValue: defaults.string(forKey: Keys.meetingDetectionMode) ?? ""
-    ) ?? .ask
+    meetingDetectionMode =
+      MeetingDetectionMode(
+        rawValue: defaults.string(forKey: Keys.meetingDetectionMode) ?? ""
+      ) ?? .ask
+    refreshAuthentication()
   }
 
   var serverURL: URL? {
@@ -64,11 +69,80 @@ final class AppSettings {
     return components.url
   }
 
-  var trimmedToken: String {
-    apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
+  var currentBinding: RecordingAuthBinding? {
+    guard let authAccount else { return nil }
+    return RecordingAuthBinding(
+      issuer: authAccount.issuer.absoluteString,
+      accountID: authAccount.accountID,
+      connectionID: authAccount.connectionID
+    )
   }
 
   var isConfigured: Bool {
-    serverURL != nil && !trimmedToken.isEmpty
+    guard let serverURL, serverURL.isAllowedEngramServer, let authAccount else { return false }
+    return authAccount.issuer == serverURL.engramBaseURL.appendingPathComponent("api/auth")
+  }
+
+  func signIn() async {
+    guard let serverURL else {
+      authenticationError = OAuthError.invalidServerURL.localizedDescription
+      return
+    }
+    isAuthenticating = true
+    authenticationError = nil
+    revocationFailed = false
+    defer { isAuthenticating = false }
+    do {
+      authAccount = try await authSession.signIn(serverURL: serverURL)
+    } catch OAuthError.cancelled {
+      authenticationError = nil
+    } catch {
+      authenticationError = error.localizedDescription
+    }
+  }
+
+  func disconnect() async {
+    guard let serverURL else { return }
+    isAuthenticating = true
+    authenticationError = nil
+    revocationFailed = false
+    defer { isAuthenticating = false }
+    do {
+      try await authSession.disconnect(serverURL: serverURL)
+      authAccount = nil
+    } catch {
+      revocationFailed = true
+      authenticationError = "Engram could not revoke this Mac yet: \(error.localizedDescription)"
+    }
+  }
+
+  func signOutLocallyAfterRevocationFailure() async {
+    do {
+      try await authSession.signOutLocally()
+      authAccount = nil
+      revocationFailed = false
+      authenticationError =
+        "Signed out on this Mac. The server credential may still be active; revoke it from Engram Settings when online."
+    } catch {
+      authenticationError = error.localizedDescription
+    }
+  }
+
+  private func refreshAuthentication() {
+    guard let serverURL, serverURL.isAllowedEngramServer else {
+      authAccount = nil
+      return
+    }
+    Task {
+      do {
+        let restored = try await authSession.restore(serverURL: serverURL)
+        guard self.serverURL?.engramBaseURL == serverURL.engramBaseURL else { return }
+        authAccount = restored
+        authenticationError = nil
+      } catch {
+        authAccount = nil
+        authenticationError = error.localizedDescription
+      }
+    }
   }
 }

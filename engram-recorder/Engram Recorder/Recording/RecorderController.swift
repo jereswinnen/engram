@@ -21,7 +21,7 @@ final class RecorderController {
 
   private let capture = AudioCaptureService()
   private let archive: RecordingArchive
-  private let api = EngramAPIClient()
+  private let api: EngramAPIClient
   private let meetingDetector: GoogleMeetDetector
   private var activeRecordingID: UUID?
   private var activeOutputURL: URL?
@@ -37,6 +37,7 @@ final class RecorderController {
   init(settings: AppSettings) {
     let meetingDetector = GoogleMeetDetector()
     self.settings = settings
+    api = EngramAPIClient(authSession: settings.authSession)
     self.meetingDetector = meetingDetector
     archive = RecordingArchive()
     meetingDetector.eventHandler = { [weak self] event in
@@ -197,7 +198,8 @@ final class RecorderController {
       startedAt: startedAt,
       durationSeconds: duration,
       audioFilename: outputURL.lastPathComponent,
-      uploadState: .local
+      uploadState: .local,
+      authBinding: settings.currentBinding
     )
     recordings.insert(recording, at: 0)
     clearActiveRecording()
@@ -211,6 +213,36 @@ final class RecorderController {
   }
 
   func retryUpload(_ recordingID: UUID) {
+    guard let index = recordings.firstIndex(where: { $0.id == recordingID }) else { return }
+    if recordings[index].authBinding?.matches(settings.currentBinding) != true {
+      guard let currentBinding = settings.currentBinding else {
+        showFailure(RecorderError.settingsIncomplete.localizedDescription)
+        return
+      }
+      let alert = NSAlert()
+      if recordings[index].authBinding == nil {
+        alert.messageText =
+          "Attach this recording to \(settings.authAccount?.displayName ?? "this Engram account")?"
+        alert.informativeText =
+          "This recording predates account binding. Engram will attach it to the currently signed-in account before uploading."
+      } else {
+        alert.messageText = "Move this local recording to the current Engram sign-in?"
+        alert.informativeText =
+          "It is attached to a different server, account, or connection. This explicit reassignment changes where its audio will be uploaded."
+      }
+      alert.alertStyle = .informational
+      alert.addButton(withTitle: "Attach & Upload")
+      alert.addButton(withTitle: "Cancel")
+      NSApp.activate(ignoringOtherApps: true)
+      guard alert.runModal() == .alertFirstButtonReturn else { return }
+      recordings[index].authBinding = currentBinding
+      Task { [weak self] in
+        guard let self else { return }
+        await self.persistHistory()
+        self.startUpload(recordingID: recordingID)
+      }
+      return
+    }
     startUpload(recordingID: recordingID)
   }
 
@@ -225,7 +257,7 @@ final class RecorderController {
 
   func openInEngram(_ recording: LocalRecording) {
     guard let path = recording.remotePath,
-      let serverURL = settings.serverURL,
+      let serverURL = recording.authBinding?.serverURL ?? settings.serverURL,
       let url = URL(string: path, relativeTo: serverURL)?.absoluteURL
     else {
       return
@@ -347,7 +379,13 @@ final class RecorderController {
       return
     }
 
-    let token = settings.trimmedToken
+    guard recordings[index].authBinding?.matches(settings.currentBinding) == true else {
+      recordings[index].uploadState = .failed
+      recordings[index].lastError =
+        OAuthError.credentialBelongsToAnotherAccount.localizedDescription
+      await persistHistory()
+      return
+    }
     recordings[index].uploadState = .uploading
     recordings[index].lastError = nil
     await persistHistory()
@@ -355,8 +393,7 @@ final class RecorderController {
     do {
       let result = try await api.upload(
         recording: recordings[index],
-        serverURL: serverURL,
-        token: token
+        serverURL: serverURL
       )
       guard let updatedIndex = recordings.firstIndex(where: { $0.id == recordingID }) else {
         return
@@ -488,13 +525,16 @@ final class RecorderController {
       showFailure("Could not connect to Engram — local copy kept")
       return
     }
+    guard recordings[index].authBinding?.matches(settings.currentBinding) == true else {
+      showFailure("This recording was uploaded by another connection — delete it from the web app")
+      return
+    }
 
     recordings[index].lastError = nil
     do {
       try await api.deleteRecording(
         remoteID: remoteID,
-        serverURL: serverURL,
-        token: settings.trimmedToken
+        serverURL: serverURL
       )
       guard !Task.isCancelled else { return }
       await deleteLocalRecording(recordingID)

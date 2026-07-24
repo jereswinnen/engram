@@ -5,6 +5,7 @@ import Security
 enum KeychainStore {
   private static let service = "jeremys.engram.recorder"
   private static let legacyService = "com.jereswinnen.engram.recorder"
+  private static let oauthService = "jeremys.engram.recorder.oauth"
 
   static func readToken() -> String {
     if let token = readToken(service: service) {
@@ -73,6 +74,91 @@ enum KeychainStore {
     } else if status != errSecSuccess {
       throw KeychainError(status: status)
     }
+  }
+
+  static func readOAuthCredential(issuer: URL) -> StoredOAuthCredential? {
+    let query: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: oauthService,
+      kSecReturnData as String: true,
+      kSecMatchLimit as String: kSecMatchLimitAll,
+      kSecUseDataProtectionKeychain as String: true,
+    ]
+    var item: CFTypeRef?
+    guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+      let values = item as? [Data]
+    else { return nil }
+    return values.lazy.compactMap {
+      try? JSONDecoder().decode(StoredOAuthCredential.self, from: $0)
+    }
+    .first { $0.issuer == issuer.absoluteString && $0.clientID == EngramOAuthClient.clientID }
+  }
+
+  static func saveOAuthCredential(_ credential: StoredOAuthCredential) throws {
+    let account = credential.keychainAccount
+    let baseQuery: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: oauthService,
+      kSecAttrAccount as String: account,
+      kSecUseDataProtectionKeychain as String: true,
+    ]
+    let data = try JSONEncoder().encode(credential)
+    let status = SecItemUpdate(
+      baseQuery as CFDictionary,
+      [kSecValueData as String: data] as CFDictionary
+    )
+    if status == errSecItemNotFound {
+      var insert = baseQuery
+      insert[kSecValueData as String] = data
+      insert[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+      let insertStatus = SecItemAdd(insert as CFDictionary, nil)
+      guard insertStatus == errSecSuccess else { throw KeychainError(status: insertStatus) }
+    } else if status != errSecSuccess {
+      throw KeychainError(status: status)
+    }
+  }
+
+  static func deleteOAuthCredential(_ credential: StoredOAuthCredential) throws {
+    let query: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: oauthService,
+      kSecAttrAccount as String: credential.keychainAccount,
+      kSecUseDataProtectionKeychain as String: true,
+    ]
+    let status = SecItemDelete(query as CFDictionary)
+    guard status == errSecSuccess || status == errSecItemNotFound else {
+      throw KeychainError(status: status)
+    }
+  }
+}
+
+struct StoredOAuthCredential: Codable, Equatable, Sendable {
+  let issuer: String
+  let accountID: String
+  let connectionID: String
+  let clientID: String
+  let refreshToken: String
+
+  var keychainAccount: String { "\(issuer)|\(accountID)|\(clientID)" }
+}
+
+protocol OAuthCredentialStoring: Sendable {
+  func read(issuer: URL) -> StoredOAuthCredential?
+  func save(_ credential: StoredOAuthCredential) throws
+  func delete(_ credential: StoredOAuthCredential) throws
+}
+
+struct SystemOAuthCredentialStore: OAuthCredentialStoring {
+  func read(issuer: URL) -> StoredOAuthCredential? {
+    KeychainStore.readOAuthCredential(issuer: issuer)
+  }
+
+  func save(_ credential: StoredOAuthCredential) throws {
+    try KeychainStore.saveOAuthCredential(credential)
+  }
+
+  func delete(_ credential: StoredOAuthCredential) throws {
+    try KeychainStore.deleteOAuthCredential(credential)
   }
 }
 

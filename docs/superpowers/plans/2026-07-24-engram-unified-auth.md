@@ -1,7 +1,7 @@
 # Engram Unified Authentication Implementation Plan
 
 **Date:** 2026-07-24
-**Status:** Phase 0 complete; Phase 1A deployed and audited; Phase 2 server foundation and isolated local lifecycle gate complete behind a disabled production flag; Phase 3 ready
+**Status:** Phase 0 complete; Phase 1A deployed and audited; Phase 2 server foundation and isolated local lifecycle gate complete behind a disabled production flag; Phase 3 Mac implementation underway with native tests passing and live lifecycle pending
 **Authority:** This is the source of truth for Engram authentication work until it is superseded by a newer dated plan.
 
 ## Goal
@@ -565,21 +565,48 @@ docs: document Engram OAuth deployment settings
 
 ### Steps
 
-- [ ] **Implement discovery/endpoint configuration** from the configured Engram server. Production requires HTTPS; Debug may explicitly allow localhost HTTP.
-- [ ] **Implement PKCE and state generation/validation** with deterministic unit tests around encoding and challenge calculation.
-- [ ] **Implement `ASWebAuthenticationSession`.** Register the exact callback scheme/claimed URL in the app and Xcode project. Handle success, user cancellation, denied consent, malformed callback, state mismatch, and server error.
-- [ ] **Implement code exchange, refresh, and revoke.** Persist a rotated refresh credential atomically before discarding the previous value. Do not promise replay detection unless the pinned server proves it.
-- [ ] **Replace token plumbing.** `EngramAPIClient` asks `EngramAuthSession` for a valid access token; callers no longer pass a raw string token.
-- [ ] **Preserve storage upload isolation.** Continue sending only storage-required headers to the R2 presigned PUT—never the Engram bearer.
-- [ ] **Update Settings.** Replace the server-token `SecureField` with Sign in, signed-in identity, issuer/server, reconnect/error state, and Disconnect.
-- [ ] **Implement disconnect safely.** Revoke the server grant first; then clear local access/refresh credentials. If network revocation fails, explain that local sign-out does not revoke a lost credential and offer retry.
-- [ ] **Bind queued recordings to issuer/account/connection.** Add backward-compatible optional Codable fields to `Recording/Models.swift`. Define how old `recordings.json` archives decode and bind. Switching server or account must never silently upload an old queue into a different account; require explicit reassignment or keep the queue attached to the original identity.
-- [ ] **Bind uploads and deletes.** The server writes `ownerId` and `createdByConnectionId` from the verified principal/provider mapping, never from a request field. Native deletion requires matching owner and connection policy; `source = "mac"` alone is never authorization.
-- [ ] **Handle legacy-origin recordings explicitly.** Either provide an owner-authenticated, audited one-time adoption path that rebinds selected locally known legacy recording IDs to the new OAuth connection, or leave those recordings browser-delete-only. Do not silently broaden `recordings:delete-own` to every Mac recording owned by the user.
+- [x] **Implement discovery/endpoint configuration** from the configured Engram server. Production requires HTTPS; Debug may explicitly allow localhost HTTP.
+- [x] **Implement PKCE and state generation/validation** with deterministic unit tests around encoding and challenge calculation.
+- [x] **Implement `ASWebAuthenticationSession`.** Register the exact callback scheme/claimed URL in the app and Xcode project. Handle success, user cancellation, denied consent, malformed callback, state mismatch, and server error.
+- [x] **Implement code exchange, refresh, and revoke.** Persist a rotated refresh credential atomically before discarding the previous value. Do not promise replay detection unless the pinned server proves it.
+- [x] **Replace token plumbing.** `EngramAPIClient` asks `EngramAuthSession` for a valid access token; callers no longer pass a raw string token.
+- [x] **Preserve storage upload isolation.** Continue sending only storage-required headers to the R2 presigned PUT—never the Engram bearer.
+- [x] **Update Settings.** Replace the server-token `SecureField` with Sign in, signed-in identity, issuer/server, reconnect/error state, and Disconnect.
+- [x] **Implement disconnect safely.** Revoke the server grant first; then clear local access/refresh credentials. If network revocation fails, explain that local sign-out does not revoke a lost credential and offer retry.
+- [x] **Bind queued recordings to issuer/account/connection.** Add backward-compatible optional Codable fields to `Recording/Models.swift`. Define how old `recordings.json` archives decode and bind. Switching server or account must never silently upload an old queue into a different account; require explicit reassignment or keep the queue attached to the original identity.
+- [x] **Bind uploads and deletes.** The server writes `ownerId` and `createdByConnectionId` from the verified principal/provider mapping, never from a request field. Native deletion requires matching owner and connection policy; `source = "mac"` alone is never authorization.
+- [x] **Handle legacy-origin recordings explicitly.** Either provide an owner-authenticated, audited one-time adoption path that rebinds selected locally known legacy recording IDs to the new OAuth connection, or leave those recordings browser-delete-only. Do not silently broaden `recordings:delete-own` to every Mac recording owned by the user.
 - [ ] **Retain server legacy compatibility for one stable release.** Old app versions may continue with the old token. The OAuth-capable Mac never selects the static token for requests. After the OAuth Mac ships, server rollback is limited to the latest OAuth-capable Phase 2 release; do not promise rollback to a pre-OAuth server. Remove the hidden legacy Keychain item only after that rollback boundary is accepted. Record non-secret legacy usage telemetry server-side.
 - [ ] **Add native tests** for PKCE/state, token response parsing, concurrent single refresh, rotated credential persistence, one retry on `401`, no retry on `403`, disconnect, and server/account queue isolation.
-- [ ] **Test old local archives.** Decode recordings created by the pre-OAuth app and verify the chosen prompt/adoption/default policy; never crash or silently assign them to a different issuer/account.
+- [x] **Test old local archives.** Decode recordings created by the pre-OAuth app and verify the chosen prompt/adoption/default policy; never crash or silently assign them to a different issuer/account.
 - [ ] **Perform the live recording lifecycle:** record -> initiate -> presigned upload -> complete -> processing -> open web URL -> delete permitted recording.
+
+### Phase 3 implementation record (2026-07-24)
+
+- Added strict same-origin OAuth discovery, Authorization Code + S256 PKCE, exact
+  state/callback validation, `ASWebAuthenticationSession`, code exchange, refresh,
+  revocation, and an exact registered callback scheme. Release accepts only HTTPS;
+  Debug additionally accepts HTTP on loopback hosts.
+- Refresh credentials are keyed by issuer, account, and client in the Data Protection
+  Keychain with `AfterFirstUnlockThisDeviceOnly`. Access credentials stay in memory.
+  Refresh discovery/rotation is one actor-managed single flight, and a rotated refresh
+  credential is saved before the new access credential is published.
+- The API client no longer accepts raw credentials. It retries one `401` after a
+  forced refresh, never retries `403`, and still sends only presigned storage headers
+  to R2.
+- New recordings bind to issuer, account, and connection. Existing JSON archives
+  decode with a nil binding; upload requires an explicit Attach & Upload confirmation.
+  A differing binding requires an explicit reassignment confirmation, and unbound
+  legacy remote recordings remain browser-delete-only.
+- The extracted Swift package currently passes nine native tests covering RFC 7636
+  PKCE, authorization request binding, callback/state validation, access identity,
+  concurrent single refresh, rotated credential persistence, bounded `401` retry,
+  no `403` retry, legacy archive decoding, and server/account/connection binding.
+  (Swift Testing reports seven auth tests plus two archive tests.)
+- Remaining Phase 3 gate: add the disconnect failure/recovery test, then exercise the
+  real browser and recording lifecycle against the OAuth-enabled isolated local
+  server. Debug and Release builds pass. Production remains disabled and unchanged
+  until that rollout is intentionally started.
 
 ### Verification matrix
 

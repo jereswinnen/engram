@@ -42,3 +42,4 @@ next-env.d.ts
 xcuserdata/
 *.xcuserstate
 DerivedData/
+engram-recorder/.build/

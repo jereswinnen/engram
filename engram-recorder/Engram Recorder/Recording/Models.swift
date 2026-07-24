@@ -18,34 +18,58 @@ enum RecorderPhase: Equatable {
   }
 }
 
-struct LocalRecording: Codable, Identifiable, Equatable, Sendable {
-  enum UploadState: String, Codable, Sendable {
+public struct LocalRecording: Codable, Identifiable, Equatable, Sendable {
+  public enum UploadState: String, Codable, Sendable {
     case local
     case uploading
     case uploaded
     case failed
   }
 
-  let id: UUID
-  var title: String
-  let startedAt: Date
-  var durationSeconds: Int
-  let audioFilename: String
-  var uploadState: UploadState
-  var remoteID: String?
-  var remotePath: String?
-  var uploadedAt: Date?
-  var lastError: String?
+  public let id: UUID
+  public var title: String
+  public let startedAt: Date
+  public var durationSeconds: Int
+  public let audioFilename: String
+  public var uploadState: UploadState
+  public var remoteID: String?
+  public var remotePath: String?
+  public var uploadedAt: Date?
+  public var lastError: String?
+  public var authBinding: RecordingAuthBinding?
 
-  var audioURL: URL {
+  public var audioURL: URL {
     RecordingArchive.recordingsDirectory
       .appendingPathComponent(audioFilename, isDirectory: false)
   }
 }
 
-struct UploadResult: Decodable, Sendable {
-  let id: String
-  let url: String
+public struct RecordingAuthBinding: Codable, Equatable, Sendable {
+  public let issuer: String
+  public let accountID: String
+  public let connectionID: String
+
+  func matches(_ other: RecordingAuthBinding?) -> Bool {
+    self == other
+  }
+
+  var serverURL: URL? {
+    guard var components = URLComponents(string: issuer),
+      components.path.hasSuffix("/api/auth")
+    else { return nil }
+    components.path.removeLast("/api/auth".count)
+    return components.url
+  }
+}
+
+public struct UploadResult: Decodable, Sendable {
+  public let id: String
+  public let url: String
+
+  public init(id: String, url: String) {
+    self.id = id
+    self.url = url
+  }
 }
 
 enum RecorderError: LocalizedError {
@@ -61,7 +85,7 @@ enum RecorderError: LocalizedError {
   var errorDescription: String? {
     switch self {
     case .settingsIncomplete:
-      "Add your Engram URL and recorder token in Settings first."
+      "Add your Engram URL and sign in from Settings first."
     case .microphonePermissionDenied:
       "Microphone access is required. Enable Engram in System Settings → Privacy & Security → Microphone."
     case .screenRecordingPermissionDenied:

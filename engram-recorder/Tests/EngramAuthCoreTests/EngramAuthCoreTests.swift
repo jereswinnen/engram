@@ -220,6 +220,23 @@ struct APIClientRetryTests {
     #expect(MockAPIURLProtocol.state.requestCount == 1)
   }
 
+  @Test("Mac disconnect revokes the current authenticated connection")
+  func revokesCurrentConnection() async throws {
+    MockAPIURLProtocol.state.reset([200])
+    let client = EngramOAuthClient(session: makeAPISession())
+
+    try await client.revokeConnection(
+      accessToken: "mac-access-token",
+      serverURL: URL(string: "https://engram.example")!
+    )
+
+    #expect(MockAPIURLProtocol.state.lastMethod == "POST")
+    #expect(
+      MockAPIURLProtocol.state.lastPath == "/api/auth/connections/current/revoke"
+    )
+    #expect(MockAPIURLProtocol.state.lastAuthorization == "Bearer mac-access-token")
+  }
+
   private func makeAPISession() -> URLSession {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [MockAPIURLProtocol.self]
@@ -240,19 +257,31 @@ private final class MockAPIState: @unchecked Sendable {
   private let lock = NSLock()
   private var statuses: [Int] = []
   private var requests = 0
+  private var method: String?
+  private var path: String?
+  private var authorization: String?
 
   var requestCount: Int { lock.withLock { requests } }
+  var lastMethod: String? { lock.withLock { method } }
+  var lastPath: String? { lock.withLock { path } }
+  var lastAuthorization: String? { lock.withLock { authorization } }
 
   func reset(_ statuses: [Int]) {
     lock.withLock {
       self.statuses = statuses
       requests = 0
+      method = nil
+      path = nil
+      authorization = nil
     }
   }
 
-  func nextStatus() -> Int {
+  func nextStatus(for request: URLRequest) -> Int {
     lock.withLock {
       requests += 1
+      method = request.httpMethod
+      path = request.url?.path
+      authorization = request.value(forHTTPHeaderField: "Authorization")
       return statuses.removeFirst()
     }
   }
@@ -265,7 +294,7 @@ private final class MockAPIURLProtocol: URLProtocol, @unchecked Sendable {
   override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
   override func startLoading() {
-    let status = Self.state.nextStatus()
+    let status = Self.state.nextStatus(for: request)
     let data = status == 403 ? Data(#"{"error":"insufficient_scope"}"#.utf8) : Data()
     client?.urlProtocol(
       self,

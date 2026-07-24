@@ -77,31 +77,101 @@ enum KeychainStore {
   }
 
   static func readOAuthCredential(issuer: URL) -> StoredOAuthCredential? {
-    let query: [String: Any] = [
-      kSecClass as String: kSecClassGenericPassword,
-      kSecAttrService as String: oauthService,
-      kSecReturnData as String: true,
-      kSecMatchLimit as String: kSecMatchLimitAll,
-      kSecUseDataProtectionKeychain as String: true,
-    ]
-    var item: CFTypeRef?
-    guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-      let values = item as? [Data]
-    else { return nil }
-    return values.lazy.compactMap {
-      try? JSONDecoder().decode(StoredOAuthCredential.self, from: $0)
+    let protected = readOAuthCredentials(useDataProtectionKeychain: true)
+    if protected.status == errSecSuccess,
+      let credential = matchingCredential(in: protected.values, issuer: issuer)
+    {
+      return credential
     }
-    .first { $0.issuer == issuer.absoluteString && $0.clientID == EngramOAuthClient.clientID }
+    guard protected.status == errSecSuccess || protected.status == errSecItemNotFound
+      || protected.status == errSecMissingEntitlement
+    else { return nil }
+
+    let fallback = readOAuthCredentials(useDataProtectionKeychain: false)
+    guard fallback.status == errSecSuccess,
+      let credential = matchingCredential(in: fallback.values, issuer: issuer)
+    else { return nil }
+
+    // A locally signed build may need the non-syncing login Keychain. Once a
+    // properly entitled release is installed, migrate only after the protected
+    // copy has been saved successfully.
+    if protected.status != errSecMissingEntitlement {
+      do {
+        try writeOAuthCredential(credential, useDataProtectionKeychain: true)
+        _ = deleteOAuthCredential(credential, useDataProtectionKeychain: false)
+      } catch {
+        // The existing device-only credential remains the source of truth.
+      }
+    }
+    return credential
   }
 
   static func saveOAuthCredential(_ credential: StoredOAuthCredential) throws {
-    let account = credential.keychainAccount
-    let baseQuery: [String: Any] = [
-      kSecClass as String: kSecClassGenericPassword,
-      kSecAttrService as String: oauthService,
-      kSecAttrAccount as String: account,
-      kSecUseDataProtectionKeychain as String: true,
-    ]
+    do {
+      try writeOAuthCredential(credential, useDataProtectionKeychain: true)
+    } catch let error as KeychainError where error.status == errSecMissingEntitlement {
+      try writeOAuthCredential(credential, useDataProtectionKeychain: false)
+    }
+  }
+
+  static func deleteOAuthCredential(_ credential: StoredOAuthCredential) throws {
+    let protectedStatus = deleteOAuthCredential(
+      credential,
+      useDataProtectionKeychain: true
+    )
+    guard protectedStatus == errSecSuccess || protectedStatus == errSecItemNotFound
+      || protectedStatus == errSecMissingEntitlement
+    else { throw KeychainError(status: protectedStatus) }
+
+    let fallbackStatus = deleteOAuthCredential(
+      credential,
+      useDataProtectionKeychain: false
+    )
+    guard fallbackStatus == errSecSuccess || fallbackStatus == errSecItemNotFound else {
+      throw KeychainError(status: fallbackStatus)
+    }
+  }
+
+  private static func matchingCredential(
+    in values: [StoredOAuthCredential],
+    issuer: URL
+  ) -> StoredOAuthCredential? {
+    values.first {
+      $0.issuer == issuer.absoluteString && $0.clientID == EngramOAuthClient.clientID
+    }
+  }
+
+  private static func readOAuthCredentials(
+    useDataProtectionKeychain: Bool
+  ) -> (status: OSStatus, values: [StoredOAuthCredential]) {
+    var query = oauthCredentialQuery(useDataProtectionKeychain: useDataProtectionKeychain)
+    query[kSecReturnData as String] = true
+    query[kSecMatchLimit as String] = kSecMatchLimitAll
+    var item: CFTypeRef?
+    let status = SecItemCopyMatching(query as CFDictionary, &item)
+    guard status == errSecSuccess else { return (status, []) }
+    let dataValues: [Data]
+    if let values = item as? [Data] {
+      dataValues = values
+    } else if let value = item as? Data {
+      dataValues = [value]
+    } else {
+      return (errSecDecode, [])
+    }
+    return (
+      status,
+      dataValues.compactMap { try? JSONDecoder().decode(StoredOAuthCredential.self, from: $0) }
+    )
+  }
+
+  private static func writeOAuthCredential(
+    _ credential: StoredOAuthCredential,
+    useDataProtectionKeychain: Bool
+  ) throws {
+    let baseQuery = oauthCredentialQuery(
+      account: credential.keychainAccount,
+      useDataProtectionKeychain: useDataProtectionKeychain
+    )
     let data = try JSONEncoder().encode(credential)
     let status = SecItemUpdate(
       baseQuery as CFDictionary,
@@ -118,17 +188,34 @@ enum KeychainStore {
     }
   }
 
-  static func deleteOAuthCredential(_ credential: StoredOAuthCredential) throws {
-    let query: [String: Any] = [
+  private static func deleteOAuthCredential(
+    _ credential: StoredOAuthCredential,
+    useDataProtectionKeychain: Bool
+  ) -> OSStatus {
+    SecItemDelete(
+      oauthCredentialQuery(
+        account: credential.keychainAccount,
+        useDataProtectionKeychain: useDataProtectionKeychain
+      ) as CFDictionary
+    )
+  }
+
+  private static func oauthCredentialQuery(
+    account: String? = nil,
+    useDataProtectionKeychain: Bool
+  ) -> [String: Any] {
+    var query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: oauthService,
-      kSecAttrAccount as String: credential.keychainAccount,
-      kSecUseDataProtectionKeychain as String: true,
     ]
-    let status = SecItemDelete(query as CFDictionary)
-    guard status == errSecSuccess || status == errSecItemNotFound else {
-      throw KeychainError(status: status)
+    if let account { query[kSecAttrAccount as String] = account }
+    if useDataProtectionKeychain {
+      query[kSecUseDataProtectionKeychain as String] = true
+    } else {
+      // Explicitly exclude iCloud Keychain synchronization for locally signed builds.
+      query[kSecAttrSynchronizable as String] = false
     }
+    return query
   }
 }
 

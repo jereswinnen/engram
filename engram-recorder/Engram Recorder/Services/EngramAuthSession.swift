@@ -169,8 +169,8 @@ actor EngramAuthSession: EngramAccessTokenProviding {
 
   func disconnect(serverURL: URL) async throws {
     guard let credential else { throw OAuthError.notSignedIn }
-    let metadata = try await resolvedMetadata(serverURL: serverURL)
-    try await oauthClient.revoke(credential.refreshToken, metadata: metadata)
+    let token = try await accessToken(for: serverURL)
+    try await oauthClient.revokeConnection(accessToken: token, serverURL: serverURL)
     try credentialStore.delete(credential)
     clearMemory()
   }
@@ -178,13 +178,6 @@ actor EngramAuthSession: EngramAccessTokenProviding {
   func signOutLocally() throws {
     if let credential { try credentialStore.delete(credential) }
     clearMemory()
-  }
-
-  private func resolvedMetadata(serverURL: URL) async throws -> OAuthServerMetadata {
-    if let metadata { return metadata }
-    let discovered = try await oauthClient.discover(serverURL: serverURL)
-    metadata = discovered
-    return discovered
   }
 
   private func validate(_ serverURL: URL) throws {

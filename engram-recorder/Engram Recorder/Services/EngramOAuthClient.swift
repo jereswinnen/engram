@@ -172,6 +172,21 @@ struct EngramOAuthClient: Sendable {
     try validateHTTP(response, data: data)
   }
 
+  func revokeConnection(accessToken: String, serverURL: URL) async throws {
+    let endpoint =
+      serverURL.engramBaseURL
+      .appendingPathComponent("api", isDirectory: true)
+      .appendingPathComponent("auth", isDirectory: true)
+      .appendingPathComponent("connections", isDirectory: true)
+      .appendingPathComponent("current", isDirectory: true)
+      .appendingPathComponent("revoke", isDirectory: false)
+    var request = URLRequest(url: endpoint)
+    request.httpMethod = "POST"
+    request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+    let (data, response) = try await session.data(for: request)
+    try validateHTTP(response, data: data)
+  }
+
   private func tokenRequest(endpoint: URL, fields: [String: String]) async throws
     -> OAuthTokenResponse
   {

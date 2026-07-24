@@ -1,7 +1,7 @@
 # Engram Unified Authentication Implementation Plan
 
 **Date:** 2026-07-24
-**Status:** Phase 0 complete; Phase 1A deployed and audited; Phase 2 server foundation and isolated local lifecycle gate complete behind a disabled production flag; Phase 3 Mac implementation underway with native tests passing and live lifecycle pending
+**Status:** Phase 0 complete; Phase 1A deployed and audited; Phase 2 server foundation and isolated local lifecycle gate complete behind a disabled production flag; Phase 3 Mac browser auth and disconnect verified locally, with the storage-backed recording lifecycle and rollout still pending
 **Authority:** This is the source of truth for Engram authentication work until it is superseded by a newer dated plan.
 
 ## Goal
@@ -558,7 +558,7 @@ docs: document Engram OAuth deployment settings
 - Send `response_type=code`, exact `client_id`, redirect URI, scopes, and API `resource`.
 - Exchange the code with the original verifier using form-encoded OAuth requests.
 - Store refresh credentials keyed by issuer + account + client, never in one global `api-token` item.
-- For macOS device-only accessibility, use the Data Protection Keychain and the most restrictive accessibility that still permits the recorder's background behavior. Validate the exact Keychain attributes on supported macOS versions.
+- For macOS device-only accessibility, use the Data Protection Keychain and the most restrictive accessibility that still permits the recorder's background behavior. Locally signed builds that receive `errSecMissingEntitlement` may fall back only to the non-synchronizing login Keychain with the same device-only accessibility; migrate the credential only after a protected copy is saved successfully. Validate the exact Keychain attributes on supported macOS versions.
 - Keep access tokens and expiry in memory when practical.
 - Serialize refresh in an actor/single-flight operation so concurrent queued uploads cannot race rotating refresh credentials.
 - Retry one authenticated request once after a refreshable `401`; never refresh-loop and never retry `403` as authentication failure.
@@ -588,9 +588,12 @@ docs: document Engram OAuth deployment settings
   revocation, and an exact registered callback scheme. Release accepts only HTTPS;
   Debug additionally accepts HTTP on loopback hosts.
 - Refresh credentials are keyed by issuer, account, and client in the Data Protection
-  Keychain with `AfterFirstUnlockThisDeviceOnly`. Access credentials stay in memory.
-  Refresh discovery/rotation is one actor-managed single flight, and a rotated refresh
-  credential is saved before the new access credential is published.
+  Keychain with `AfterFirstUnlockThisDeviceOnly`. Locally signed builds without the
+  Data Protection Keychain entitlement use an explicit non-synchronizing, device-only
+  login-Keychain fallback; a future entitled build migrates only after saving the
+  protected copy. Access credentials stay in memory. Refresh discovery/rotation is one
+  actor-managed single flight, and a rotated refresh credential is saved before the
+  new access credential is published.
 - The API client no longer accepts raw credentials. It retries one `401` after a
   forced refresh, never retries `403`, and still sends only presigned storage headers
   to R2.
@@ -598,15 +601,26 @@ docs: document Engram OAuth deployment settings
   decode with a nil binding; upload requires an explicit Attach & Upload confirmation.
   A differing binding requires an explicit reassignment confirmation, and unbound
   legacy remote recordings remain browser-delete-only.
-- The extracted Swift package currently passes nine native tests covering RFC 7636
+- The extracted Swift package currently passes ten native tests covering RFC 7636
   PKCE, authorization request binding, callback/state validation, access identity,
   concurrent single refresh, rotated credential persistence, bounded `401` retry,
-  no `403` retry, legacy archive decoding, and server/account/connection binding.
-  (Swift Testing reports seven auth tests plus two archive tests.)
+  no `403` retry, authenticated current-connection revocation, legacy archive decoding,
+  and server/account/connection binding. (Swift Testing reports eight auth tests plus
+  two archive tests.)
+- The real `ASWebAuthenticationSession` flow passed against the isolated localhost
+  server with a synthetic user: discovery, system-browser login, callback, code
+  exchange, signed-in identity, renewable credential storage, Disconnect, server-side
+  connection revocation, refresh revocation, and local credential deletion all passed.
+  Live testing exposed and fixed both the locally signed Keychain entitlement fallback
+  and the need to call the authenticated current-connection revocation endpoint rather
+  than revoking only one refresh token. Database inspection confirmed both the
+  connection and refresh credential were revoked. The installed app, production data,
+  and production flags were not changed.
 - Remaining Phase 3 gate: add the disconnect failure/recovery test, then exercise the
-  real browser and recording lifecycle against the OAuth-enabled isolated local
-  server. Debug and Release builds pass. Production remains disabled and unchanged
-  until that rollout is intentionally started.
+  storage-backed recording lifecycle against an OAuth-enabled environment with working
+  object storage. The local test server deliberately used placeholder R2 credentials,
+  so recording/upload was not attempted. Debug and Release builds pass. Production
+  remains disabled and unchanged until that rollout is intentionally started.
 
 ### Verification matrix
 

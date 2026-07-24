@@ -5,16 +5,14 @@ enum RecorderPhase: Equatable {
   case preparing
   case recording
   case finalizing
-  case uploading
-  case processing
-  case success(URL)
+  case savedLocally
   case failure(String)
 
   var isBusy: Bool {
     switch self {
-    case .preparing, .recording, .finalizing, .uploading, .processing:
+    case .preparing, .recording, .finalizing:
       true
-    case .idle, .success, .failure:
+    case .idle, .savedLocally, .failure:
       false
     }
   }
@@ -36,6 +34,7 @@ struct LocalRecording: Codable, Identifiable, Equatable, Sendable {
   var uploadState: UploadState
   var remoteID: String?
   var remotePath: String?
+  var uploadedAt: Date?
   var lastError: String?
 
   var audioURL: URL {

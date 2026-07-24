@@ -14,7 +14,8 @@ keeps a recoverable local M4A, and uploads it directly to Engram.
 3. **Recovery and upload — complete.** Recordings are finalized in Application
    Support before upload. History survives relaunches, interrupted uploads become
    retryable, retries reuse the local recording UUID, and a completed R2 object is
-   reused after an interruption instead of being uploaded twice.
+   reused after an interruption instead of being uploaded twice. Confirmed uploads
+   are removed locally after seven days; failed and local-only recordings are kept.
 4. **Menu-bar experience — complete.** The app is an `LSUIElement` with no Dock icon,
    a global ⌘⇧R shortcut, an always-on-top draggable `NSPanel` capsule, a throttled
    live waveform, recent history, Settings, retry, Finder reveal, and Open in Engram.
@@ -37,7 +38,8 @@ keeps a recoverable local M4A, and uploads it directly to Engram.
    records automatically. Ask before recording is the default.
 
 Local audio and history are stored inside the sandboxed Application Support container.
-Successful recordings are retained locally for now; failed uploads are never deleted.
+Successful uploads are retained locally for seven days; failed uploads are never
+deleted automatically.
 
 ## Build
 

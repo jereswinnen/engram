@@ -5,6 +5,8 @@ import Observation
 @MainActor
 @Observable
 final class RecorderController {
+  private static let localRecordingRetention: TimeInterval = 7 * 24 * 60 * 60
+
   private(set) var phase: RecorderPhase = .idle {
     didSet { phaseHandler?(phase) }
   }
@@ -27,6 +29,7 @@ final class RecorderController {
   private var activeMeetingSessionID: UUID?
   private var elapsedTask: Task<Void, Never>?
   private var dismissalTask: Task<Void, Never>?
+  private var retentionCleanupTask: Task<Void, Never>?
   private var uploadTasks: [UUID: Task<Void, Never>] = [:]
   private var deletionTasks: [UUID: Task<Void, Never>] = [:]
   private(set) var deletingRecordingIDs: Set<UUID> = []
@@ -43,7 +46,11 @@ final class RecorderController {
       self?.configureMeetingDetection(for: mode)
     }
     configureMeetingDetection(for: settings.meetingDetectionMode)
-    Task { await loadHistory() }
+    Task { [weak self] in
+      guard let self else { return }
+      await self.loadHistory()
+      self.scheduleRetentionCleanup()
+    }
   }
 
   var isRecording: Bool {
@@ -52,29 +59,35 @@ final class RecorderController {
 
   var canStart: Bool {
     switch phase {
-    case .idle, .success, .failure:
+    case .idle, .savedLocally, .failure:
       true
     default:
       false
     }
   }
 
+  var isUploading: Bool {
+    recordings.contains { $0.uploadState == .uploading }
+  }
+
   var statusTitle: String {
     switch phase {
     case .idle:
-      detectedMeeting == nil ? "Ready" : "\(detectedMeeting?.title ?? "Meeting") detected"
+      if let detectedMeeting {
+        "\(detectedMeeting.title) detected"
+      } else if isUploading {
+        "Uploading to Engram…"
+      } else {
+        "Ready"
+      }
     case .preparing:
       "Preparing…"
     case .recording:
       "Recording"
     case .finalizing:
       "Saving recording…"
-    case .uploading:
-      "Uploading to Engram…"
-    case .processing:
-      "Sent for transcription"
-    case .success:
-      "Saved to Engram"
+    case .savedLocally:
+      "Saved locally"
     case .failure(let message):
       message
     }
@@ -189,18 +202,23 @@ final class RecorderController {
     recordings.insert(recording, at: 0)
     clearActiveRecording()
     await persistHistory()
+
+    phase = .savedLocally
+    scheduleDismissal(after: .seconds(1.1))
     if uploadAfterStop {
-      await upload(recordingID: id, controlsCapsule: true)
-    } else {
-      phase = .idle
+      startUpload(recordingID: id)
     }
   }
 
   func retryUpload(_ recordingID: UUID) {
+    startUpload(recordingID: recordingID)
+  }
+
+  private func startUpload(recordingID: UUID) {
     guard uploadTasks[recordingID] == nil else { return }
     uploadTasks[recordingID] = Task { [weak self] in
       guard let self else { return }
-      await self.upload(recordingID: recordingID, controlsCapsule: false)
+      await self.upload(recordingID: recordingID)
       self.uploadTasks[recordingID] = nil
     }
   }
@@ -261,6 +279,7 @@ final class RecorderController {
       for task in deletionTasks.values {
         task.cancel()
       }
+      retentionCleanupTask?.cancel()
       NSApp.terminate(nil)
     }
   }
@@ -317,7 +336,7 @@ final class RecorderController {
     }
   }
 
-  private func upload(recordingID: UUID, controlsCapsule: Bool) async {
+  private func upload(recordingID: UUID) async {
     guard let index = recordings.firstIndex(where: { $0.id == recordingID }) else {
       return
     }
@@ -325,16 +344,12 @@ final class RecorderController {
       recordings[index].uploadState = .failed
       recordings[index].lastError = RecorderError.settingsIncomplete.localizedDescription
       await persistHistory()
-      if controlsCapsule {
-        showFailure("Saved locally — configure Engram to upload")
-      }
       return
     }
 
     let token = settings.trimmedToken
     recordings[index].uploadState = .uploading
     recordings[index].lastError = nil
-    if controlsCapsule { phase = .uploading }
     await persistHistory()
 
     do {
@@ -349,21 +364,10 @@ final class RecorderController {
       recordings[updatedIndex].uploadState = .uploaded
       recordings[updatedIndex].remoteID = result.id
       recordings[updatedIndex].remotePath = result.url
+      recordings[updatedIndex].uploadedAt = Date()
       recordings[updatedIndex].lastError = nil
       await persistHistory()
-
-      if controlsCapsule {
-        phase = .processing
-        try? await Task.sleep(for: .seconds(1.1))
-        guard !Task.isCancelled else { return }
-        let remoteURL = URL(string: result.url, relativeTo: serverURL)?.absoluteURL
-        if let remoteURL {
-          phase = .success(remoteURL)
-        } else {
-          phase = .idle
-        }
-        scheduleDismissal()
-      }
+      scheduleRetentionCleanup()
     } catch {
       guard let failedIndex = recordings.firstIndex(where: { $0.id == recordingID }) else {
         return
@@ -371,9 +375,6 @@ final class RecorderController {
       recordings[failedIndex].uploadState = .failed
       recordings[failedIndex].lastError = error.localizedDescription
       await persistHistory()
-      if controlsCapsule {
-        showFailure("Saved locally — upload failed")
-      }
     }
   }
 
@@ -381,12 +382,24 @@ final class RecorderController {
     do {
       recordings = try await archive.load().sorted { $0.startedAt > $1.startedAt }
       var changed = false
+      let migrationDate = Date()
       for index in recordings.indices where recordings[index].uploadState == .uploading {
         recordings[index].uploadState = .failed
         recordings[index].lastError = "Upload was interrupted. Retry when ready."
         changed = true
       }
+      // Older archive entries predate upload timestamps. Give them a full
+      // retention window from this app version's first launch rather than
+      // unexpectedly deleting them immediately.
+      for index in recordings.indices
+      where recordings[index].uploadState == .uploaded
+        && recordings[index].uploadedAt == nil
+      {
+        recordings[index].uploadedAt = migrationDate
+        changed = true
+      }
       if changed { await persistHistory() }
+      await deleteExpiredLocalRecordings(now: migrationDate)
     } catch {
       showFailure("Could not load recording history")
     }
@@ -405,8 +418,61 @@ final class RecorderController {
       try await archive.deleteAudio(for: recording)
       recordings.removeAll { $0.id == recordingID }
       try await archive.save(recordings)
+      scheduleRetentionCleanup()
     } catch {
       showFailure("Could not delete the recording")
+    }
+  }
+
+  private func deleteExpiredLocalRecordings(now: Date = Date()) async {
+    let cutoff = now.addingTimeInterval(-Self.localRecordingRetention)
+    let expired = recordings.filter { recording in
+      recording.uploadState == .uploaded
+        && recording.uploadedAt.map { $0 <= cutoff } == true
+    }
+    guard !expired.isEmpty else { return }
+
+    var deletedIDs: Set<UUID> = []
+    for recording in expired {
+      do {
+        try await archive.deleteAudio(for: recording)
+        deletedIDs.insert(recording.id)
+      } catch {
+        // Keep the history entry so a filesystem failure can be retried later.
+      }
+    }
+
+    guard !deletedIDs.isEmpty else { return }
+    recordings.removeAll { deletedIDs.contains($0.id) }
+    await persistHistory()
+  }
+
+  private func scheduleRetentionCleanup(now: Date = Date()) {
+    retentionCleanupTask?.cancel()
+    retentionCleanupTask = nil
+
+    let nextExpiration = recordings.compactMap { recording -> Date? in
+      guard recording.uploadState == .uploaded, let uploadedAt = recording.uploadedAt else {
+        return nil
+      }
+      return uploadedAt.addingTimeInterval(Self.localRecordingRetention)
+    }.min()
+    guard let nextExpiration else { return }
+
+    // A failed filesystem deletion leaves the entry eligible. Retry it later
+    // instead of immediately spinning on the same expired recording.
+    let interval = nextExpiration.timeIntervalSince(now)
+    let delay = interval > 0 ? interval : 60 * 60
+    retentionCleanupTask = Task { [weak self] in
+      do {
+        try await Task.sleep(for: .seconds(delay))
+      } catch {
+        return
+      }
+      guard let self, !Task.isCancelled else { return }
+      self.retentionCleanupTask = nil
+      await self.deleteExpiredLocalRecordings()
+      self.scheduleRetentionCleanup()
     }
   }
 

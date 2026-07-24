@@ -25,7 +25,8 @@ struct SettingsView: View {
         }
 
         Text(
-          "The token is stored in your macOS Keychain. Audio stays local until Engram accepts the upload."
+          "The token is stored in your macOS Keychain. After Engram confirms an upload, "
+            + "its local recording is kept for 7 days, then removed automatically."
         )
         .font(.caption)
         .foregroundStyle(.secondary)

@@ -65,18 +65,6 @@ struct CapsuleView: View {
         .minimumScaleFactor(0.8)
         .frame(maxWidth: .infinity)
 
-      if case .success(let url) = controller.phase {
-        Button {
-          NSWorkspace.shared.open(url)
-        } label: {
-          Image(systemName: "arrow.up.right.square")
-            .frame(width: 28, height: 28)
-        }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.small)
-        .help("Open in Engram")
-        .accessibilityLabel("Open in Engram")
-      }
     }
     .padding(.horizontal, 4)
   }
@@ -99,9 +87,7 @@ struct CapsuleView: View {
     case .preparing: "Starting"
     case .recording: "Recording"
     case .finalizing: "Saving"
-    case .uploading: "Uploading"
-    case .processing: "Sent"
-    case .success: "Done"
+    case .savedLocally: "Saved"
     case .failure: "Failed"
     }
   }
@@ -114,10 +100,10 @@ struct CapsuleView: View {
         .fill(.red)
         .frame(width: 10, height: 10)
         .shadow(color: .red.opacity(0.45), radius: 5)
-    case .preparing, .finalizing, .uploading, .processing:
+    case .preparing, .finalizing:
       ProgressView()
         .controlSize(.small)
-    case .success:
+    case .savedLocally:
       Image(systemName: "checkmark.circle.fill")
         .foregroundStyle(.green)
         .font(.system(size: 20))

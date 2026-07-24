@@ -26,12 +26,14 @@ struct EngramRecorderApp: App {
   private var menuBarTitle: String {
     if runtime.controller.isRecording { return "Engram is recording" }
     if let meeting = runtime.controller.detectedMeeting { return "\(meeting.title) detected" }
+    if runtime.controller.isUploading { return "Engram is uploading" }
     return "Engram Recorder"
   }
 
   private var menuBarSymbol: String {
     if runtime.controller.isRecording { return "record.circle.fill" }
     if runtime.controller.detectedMeeting != nil { return "video.fill" }
+    if runtime.controller.isUploading { return "arrow.up.circle" }
     return "waveform"
   }
 }

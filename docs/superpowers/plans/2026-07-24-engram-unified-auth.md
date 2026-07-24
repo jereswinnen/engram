@@ -1,7 +1,7 @@
 # Engram Unified Authentication Implementation Plan
 
 **Date:** 2026-07-24
-**Status:** Phase 0 complete; Phase 1A code and additive migration complete; live ownership gate pending
+**Status:** Phase 0 complete; Phase 1A deployed and ownership backfill audited; live behavior/soak gate pending
 **Authority:** This is the source of truth for Engram authentication work until it is superseded by a newer dated plan.
 
 ## Goal
@@ -359,14 +359,23 @@ Do not make the columns non-null while an old server rollback might still insert
 - Added read-only preflight/postflight audits and an all-or-nothing operator backfill under `scripts/`. The backfill requires a matching existing user ID/email, locks affected tables against concurrent writes, refuses ambiguous speaker normalization, and performs no inferred merge or deletion.
 - Added the owner principal/policy boundary, synthetic legacy connection, owner-qualified stores and route queries, one-time owner-bound Plaud attempts, and cross-owner regression tests.
 - Verified locally: 41 test files / 183 tests pass, `pnpm typecheck` passes, the Next.js production build passes, and the macOS Debug scheme builds successfully.
-- No production database was connected to, migrated, audited, backfilled, or otherwise changed. The three live operator items and the Phase 1 gate remain deliberately unchecked below.
+- Before the live rollout, no production database was connected to or changed by the implementation work; production execution remained a separate, explicit operator gate.
+
+### Phase 1A production rollout record (completed 2026-07-24)
+
+- Created and validated a custom-format PostgreSQL backup before rollout. The read-only preflight found 38 recordings, 39 transcriptions, 38 AI enhancements, one API credential, one sync-state row, and zero ownership-independent orphan relationships.
+- Selected the existing Better Auth account `hey@jeremys.be` (`BTiCQa85G6gd7rjKjnTyl5s4HNHW2TIv`) as the canonical owner. No user was inferred or created by the backfill.
+- Deployed commit `f38d217` to Railway production as deployment `3633b6f8-8ee7-44c7-9a92-8980f99d5aeb`. Railway reported `SUCCESS`; its pre-deploy command applied the additive migration before starting Next.js.
+- Ran `scripts/backfill-auth-ownership.sql` as one transaction. It assigned 38 recordings, one API credential, and one sync-state row to the canonical owner, created the synthetic legacy Mac connection, and attributed the two existing Mac recordings. No rows were deleted.
+- Ran `scripts/audit-auth-ownership-after.sql`. Every null-owner, orphan-owner, invalid connection-attribution, mismatched speaker-mapping, and duplicate normalized-speaker check returned zero.
+- Verified the public signed-out boundary: `/login` returns `200`, `/` redirects to login, and `/api/recordings` returns `401`. `AUTH_ALLOW_UNOWNED_LEGACY_DATA=true` remains enabled only for the rollback/soak window; the live sign-in, second-user, and Mac lifecycle gates remain unchecked.
 
 ### Steps
 
-- [ ] **Back up and audit production data.** The read-only scripts and runbook are ready; a production snapshot and captured audit output require an operator with Railway access.
-- [x] **Add nullable `ownerId` columns** to the root user-derived tables in the Ownership Model. Migration `0010_round_obadiah_stane.sql` is additive and has not been applied by this implementation task.
-- [ ] **Add connection origin.** Schema, lazy no-gap provisioning, and the transactional seed/backfill are implemented; checking this item requires executing and auditing the production backfill.
-- [ ] **Backfill the canonical owner explicitly.** The fail-closed operator script and `LEGACY_MAC_RECORDER_OWNER_ID` bridge are implemented; checking this item requires selecting and recording the live owner and executing the production transaction.
+- [x] **Back up and audit production data.** A custom-format PostgreSQL backup was created and validated before the captured read-only production audit.
+- [x] **Add nullable `ownerId` columns** to the root user-derived tables in the Ownership Model. Additive migration `0010_round_obadiah_stane.sql` was applied by Railway deployment `3633b6f8-8ee7-44c7-9a92-8980f99d5aeb`.
+- [x] **Add connection origin.** The production backfill created and audited the synthetic legacy Mac connection and attributed the two existing Mac recordings.
+- [x] **Backfill the canonical owner explicitly.** The fail-closed production transaction matched `hey@jeremys.be` by exact account ID/email and the postflight audit returned zero gaps.
 - [x] **Add `AuthPrincipal`.** Support session, future OAuth, and temporary legacy Mac mechanisms. Include scopes/audience/client/grant fields even before OAuth is enabled.
 - [x] **Implement header precedence.** If `Authorization` exists and is invalid, return `401`; never fall back to a cookie. Only inspect cookies when there is no bearer header.
 - [x] **Replace boolean/role checks** with policies and owner-qualified queries.

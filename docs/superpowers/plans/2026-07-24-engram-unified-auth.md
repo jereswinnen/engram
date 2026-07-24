@@ -577,7 +577,7 @@ docs: document Engram OAuth deployment settings
 - [x] **Bind uploads and deletes.** The server writes `ownerId` and `createdByConnectionId` from the verified principal/provider mapping, never from a request field. Native deletion requires matching owner and connection policy; `source = "mac"` alone is never authorization.
 - [x] **Handle legacy-origin recordings explicitly.** Either provide an owner-authenticated, audited one-time adoption path that rebinds selected locally known legacy recording IDs to the new OAuth connection, or leave those recordings browser-delete-only. Do not silently broaden `recordings:delete-own` to every Mac recording owned by the user.
 - [ ] **Retain server legacy compatibility for one stable release.** Old app versions may continue with the old token. The OAuth-capable Mac never selects the static token for requests. After the OAuth Mac ships, server rollback is limited to the latest OAuth-capable Phase 2 release; do not promise rollback to a pre-OAuth server. Remove the hidden legacy Keychain item only after that rollback boundary is accepted. Record non-secret legacy usage telemetry server-side.
-- [ ] **Add native tests** for PKCE/state, token response parsing, concurrent single refresh, rotated credential persistence, one retry on `401`, no retry on `403`, disconnect, and server/account queue isolation.
+- [x] **Add native tests** for PKCE/state, token response parsing, concurrent single refresh, rotated credential persistence, one retry on `401`, no retry on `403`, disconnect, and server/account queue isolation.
 - [x] **Test old local archives.** Decode recordings created by the pre-OAuth app and verify the chosen prompt/adoption/default policy; never crash or silently assign them to a different issuer/account.
 - [ ] **Perform the live recording lifecycle:** record -> initiate -> presigned upload -> complete -> processing -> open web URL -> delete permitted recording.
 
@@ -601,12 +601,12 @@ docs: document Engram OAuth deployment settings
   decode with a nil binding; upload requires an explicit Attach & Upload confirmation.
   A differing binding requires an explicit reassignment confirmation, and unbound
   legacy remote recordings remain browser-delete-only.
-- The extracted Swift package currently passes ten native tests covering RFC 7636
+- The extracted Swift package currently passes eleven native tests covering RFC 7636
   PKCE, authorization request binding, callback/state validation, access identity,
   concurrent single refresh, rotated credential persistence, bounded `401` retry,
   no `403` retry, authenticated current-connection revocation, legacy archive decoding,
-  and server/account/connection binding. (Swift Testing reports eight auth tests plus
-  two archive tests.)
+  disconnect failure/retry recovery, and server/account/connection binding. (Swift
+  Testing reports nine auth tests plus two archive tests.)
 - The real `ASWebAuthenticationSession` flow passed against the isolated localhost
   server with a synthetic user: discovery, system-browser login, callback, code
   exchange, signed-in identity, renewable credential storage, Disconnect, server-side
@@ -616,8 +616,8 @@ docs: document Engram OAuth deployment settings
   than revoking only one refresh token. Database inspection confirmed both the
   connection and refresh credential were revoked. The installed app, production data,
   and production flags were not changed.
-- Remaining Phase 3 gate: add the disconnect failure/recovery test, then exercise the
-  storage-backed recording lifecycle against an OAuth-enabled environment with working
+- Remaining Phase 3 gate: exercise the storage-backed recording lifecycle against an
+  OAuth-enabled environment with working
   object storage. The local test server deliberately used placeholder R2 credentials,
   so recording/upload was not attempted. Debug and Release builds pass. Production
   remains disabled and unchanged until that rollout is intentionally started.

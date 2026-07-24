@@ -98,6 +98,40 @@ func concurrentRefresh() async throws {
   #expect(store.current?.refreshToken == "rotated-refresh")
 }
 
+@Test("Disconnect keeps the renewable credential when revocation fails and can retry")
+func disconnectFailureRecovery() async throws {
+  DisconnectOAuthURLProtocol.state.reset()
+  let configuration = URLSessionConfiguration.ephemeral
+  configuration.protocolClasses = [DisconnectOAuthURLProtocol.self]
+  let client = EngramOAuthClient(session: URLSession(configuration: configuration))
+  let initial = StoredOAuthCredential(
+    issuer: "https://engram.example/api/auth",
+    accountID: "user-123",
+    connectionID: "connection-456",
+    clientID: EngramOAuthClient.clientID,
+    refreshToken: "initial-refresh"
+  )
+  let store = MemoryCredentialStore(initial)
+  let auth = EngramAuthSession(oauthClient: client, credentialStore: store)
+  let server = URL(string: "https://engram.example")!
+  _ = try await auth.restore(serverURL: server)
+
+  do {
+    try await auth.disconnect(serverURL: server)
+    Issue.record("Expected the first server revocation attempt to fail")
+  } catch {}
+
+  #expect(store.current?.refreshToken == "rotated-refresh")
+  #expect(DisconnectOAuthURLProtocol.state.tokenRequests == 1)
+  #expect(DisconnectOAuthURLProtocol.state.revokeRequests == 1)
+
+  try await auth.disconnect(serverURL: server)
+
+  #expect(store.current == nil)
+  #expect(DisconnectOAuthURLProtocol.state.tokenRequests == 1)
+  #expect(DisconnectOAuthURLProtocol.state.revokeRequests == 2)
+}
+
 private final class MemoryCredentialStore: OAuthCredentialStoring, @unchecked Sendable {
   private let lock = NSLock()
   private var value: StoredOAuthCredential?
@@ -163,6 +197,106 @@ private final class MockOAuthURLProtocol: URLProtocol, @unchecked Sendable {
     client?.urlProtocol(
       self,
       didReceive: HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+      cacheStoragePolicy: .notAllowed
+    )
+    client?.urlProtocol(self, didLoad: data)
+    client?.urlProtocolDidFinishLoading(self)
+  }
+
+  override func stopLoading() {}
+
+  private func makeAccessToken() -> String {
+    let payload = try! JSONSerialization.data(withJSONObject: [
+      "sub": "user-123",
+      "iss": "https://engram.example/api/auth",
+      "connection_id": "connection-456",
+    ])
+    let encoded = payload.base64EncodedString()
+      .replacingOccurrences(of: "+", with: "-")
+      .replacingOccurrences(of: "/", with: "_")
+      .replacingOccurrences(of: "=", with: "")
+    return "header.\(encoded).signature"
+  }
+}
+
+private final class DisconnectOAuthState: @unchecked Sendable {
+  private let lock = NSLock()
+  private var tokenCount = 0
+  private var revokeCount = 0
+  private var revokeStatuses = [503, 200]
+
+  var tokenRequests: Int { lock.withLock { tokenCount } }
+  var revokeRequests: Int { lock.withLock { revokeCount } }
+
+  func reset() {
+    lock.withLock {
+      tokenCount = 0
+      revokeCount = 0
+      revokeStatuses = [503, 200]
+    }
+  }
+
+  func recordTokenRequest() { lock.withLock { tokenCount += 1 } }
+
+  func nextRevokeStatus() -> Int {
+    lock.withLock {
+      revokeCount += 1
+      return revokeStatuses.removeFirst()
+    }
+  }
+}
+
+private final class DisconnectOAuthURLProtocol: URLProtocol, @unchecked Sendable {
+  static let state = DisconnectOAuthState()
+
+  override class func canInit(with request: URLRequest) -> Bool { true }
+  override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+  override func startLoading() {
+    let url = request.url!
+    let status: Int
+    let data: Data
+
+    if url.path.contains(".well-known") {
+      status = 200
+      data = Data(
+        """
+        {
+          "issuer":"https://engram.example/api/auth",
+          "authorization_endpoint":"https://engram.example/api/auth/oauth2/authorize",
+          "token_endpoint":"https://engram.example/api/auth/oauth2/token",
+          "revocation_endpoint":"https://engram.example/api/auth/oauth2/revoke"
+        }
+        """.utf8
+      )
+    } else if url.path == "/api/auth/oauth2/token" {
+      Self.state.recordTokenRequest()
+      status = 200
+      let token = makeAccessToken()
+      data = Data(
+        """
+        {"access_token":"\(token)","token_type":"Bearer","expires_in":900,"refresh_token":"rotated-refresh"}
+        """.utf8
+      )
+    } else if url.path == "/api/auth/connections/current/revoke" {
+      status = Self.state.nextRevokeStatus()
+      data =
+        status == 200
+        ? Data(#"{"revoked":true}"#.utf8)
+        : Data(#"{"error":"temporarily_unavailable"}"#.utf8)
+    } else {
+      status = 404
+      data = Data(#"{"error":"not_found"}"#.utf8)
+    }
+
+    client?.urlProtocol(
+      self,
+      didReceive: HTTPURLResponse(
+        url: url,
+        statusCode: status,
+        httpVersion: nil,
+        headerFields: nil
+      )!,
       cacheStoragePolicy: .notAllowed
     )
     client?.urlProtocol(self, didLoad: data)

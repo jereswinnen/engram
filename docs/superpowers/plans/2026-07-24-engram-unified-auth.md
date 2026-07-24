@@ -369,6 +369,7 @@ Do not make the columns non-null while an old server rollback might still insert
 - Ran `scripts/backfill-auth-ownership.sql` as one transaction. It assigned 38 recordings, one API credential, and one sync-state row to the canonical owner, created the synthetic legacy Mac connection, and attributed the two existing Mac recordings. No rows were deleted.
 - Ran `scripts/audit-auth-ownership-after.sql`. Every null-owner, orphan-owner, invalid connection-attribution, mismatched speaker-mapping, and duplicate normalized-speaker check returned zero.
 - Verified the public signed-out boundary: `/login` returns `200`, `/` redirects to login, and `/api/recordings` returns `401`. `AUTH_ALLOW_UNOWNED_LEGACY_DATA=true` remains enabled only for the rollback/soak window; the live sign-in, second-user, and Mac lifecycle gates remain unchecked.
+- Live Mac smoke testing exposed an AirPods sample-rate route change that stopped `AVAudioEngine` before any frames were written, so no request reached Engram. The recorder now observes `AVAudioEngineConfigurationChange`, rebuilds its graph off the notification queue, and serializes recovery against Stop. The replacement app was installed with the previous bundle retained under `/private/tmp`; the user confirmed recording works again, and production returned `200` for both owner-bound `/api/recordings/initiate` and `/complete`. Because the disposable test row was not present during the follow-up read-only query and no DELETE request was indexed, the broader process/open/delete live gate remains unchecked.
 
 ### Steps
 

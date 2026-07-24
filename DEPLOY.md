@@ -158,6 +158,7 @@ Before deploying the owner-aware application:
    Existing rows whose `source` is `mac` are attributed to the synthetic legacy
    connection as inferred migration provenance; `source` was historically
    client-supplied, so save and review the preflight source counts first.
+
 7. Run and save the post-backfill audit. Every null/orphan/invalid-attribution count
    must be zero:
 
@@ -174,6 +175,66 @@ If the application is rolled back to an owner-unaware version, keep the nullable
 schema. Before returning to owner-aware code, stop writes, rerun the transactional
 backfill and post-audit to repair any null-owned rows created during the rollback.
 Do not apply Phase 1B non-null/removal constraints until that rollback window closes.
+
+### Unified auth Phase 2: OAuth foundation (migration 0011)
+
+Migration `0011_grey_victor_mancha.sql` is additive. It creates only the pinned
+Better Auth provider tables (`jwks`, `oauth_client`, `oauth_consent`,
+`oauth_refresh_token`, and `oauth_access_token`) and indexes. It does not update or
+delete recordings, transcripts, ownership rows, or existing web sessions.
+
+Roll out the server foundation with OAuth dark first:
+
+1. Leave `AUTH_OAUTH_BEARER_ENABLED=false` and deploy. Railway applies migration
+   0011 before the application starts. Existing cookie login and the legacy Mac
+   token remain the active paths.
+2. In a Railway one-off shell for the app service, provision the fixed public Mac
+   client:
+
+   ```bash
+   pnpm auth:provision-clients
+   ```
+
+   This command is idempotent. It preserves the existing database row/client ID and
+   grants, enforces the exact callback
+   `jeremys.engram.recorder://oauth/callback`, requires PKCE S256, and refuses to
+   replace a confidential client with a public one.
+
+3. Restore the database backup into staging (or use another disposable database),
+   set `AUTH_OAUTH_BEARER_ENABLED=true` there, and test discovery, login, consent,
+   code exchange, API access, refresh, web revocation, and failed refresh.
+4. Keep production OAuth disabled until that staging lifecycle and the Phase 2 gate
+   in the unified-auth plan pass. Enabling the flag exposes discovery/provider
+   routes and bearer verification as one change; `MCP_ENABLED` stays false.
+
+Unauthenticated dynamic registration is limited to the MCP transcript-read scopes
+and is rate-limited to five registrations per IP per minute. Schedule this safe
+cleanup at least daily once DCR is enabled:
+
+```bash
+pnpm auth:cleanup-clients
+```
+
+It removes only anonymous clients older than 24 hours that have no consent, refresh
+token, or access-token row. It never removes the fixed Mac client. Auth rate limits
+currently use Better Auth's in-process store, which is appropriate for the current
+single app replica; configure shared rate-limit storage before scaling to multiple
+replicas.
+
+OAuth access tokens are Ed25519 JWTs valid for 15 minutes. Signing keys live in the
+Postgres `jwks` table, so normal database backup/restore includes them and all app
+replicas see the same keys. A new key is generated every seven days; retired public
+keys remain advertised for a 30-day overlap. The automated contract test verifies
+that tokens signed by an old key work during overlap and fail after retirement.
+Standard token revocation may leave a JWT usable until its 15-minute expiry. The
+Engram web Connections action and the native self-disconnect endpoint additionally
+revoke `auth_connections`, so Engram API access stops immediately.
+
+`BETTER_AUTH_SECRET` encrypts persisted private signing keys and also protects web
+sessions/signed OAuth queries. Do not rotate it as if it were a JWK. Application-
+secret rotation needs a separate, tested maintenance procedure that preserves or
+re-encrypts existing key material; weekly JWK rotation requires no environment-
+secret change.
 
 ---
 

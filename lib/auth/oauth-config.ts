@@ -26,6 +26,12 @@ export const ENGRAM_MCP_SCOPES = [
   "offline_access",
 ] as const
 
+export const ENGRAM_IOS_SCOPES = [
+  "recordings:read",
+  "transcripts:read",
+  "offline_access",
+] as const
+
 export type EngramOAuthScope = (typeof ENGRAM_OAUTH_SCOPES)[number]
 
 export function oauthUrls(appUrl: string) {
@@ -41,4 +47,37 @@ export function oauthUrls(appUrl: string) {
     apiProtectedResourceMetadata: `${base}/.well-known/oauth-protected-resource/api`,
     mcpProtectedResourceMetadata: `${base}/.well-known/oauth-protected-resource/mcp`,
   } as const
+}
+
+export function oauthGrantMatchesClient(input: {
+  appUrl: string
+  clientId: string
+  resource?: string
+  scopes: readonly string[]
+}): boolean {
+  const urls = oauthUrls(input.appUrl)
+  if (input.clientId === ENGRAM_MAC_CLIENT_ID) {
+    return (
+      input.resource === urls.apiResource &&
+      isScopeSubset(input.scopes, ENGRAM_MAC_SCOPES)
+    )
+  }
+  if (input.clientId === ENGRAM_IOS_CLIENT_ID) {
+    return (
+      input.resource === urls.apiResource &&
+      isScopeSubset(input.scopes, ENGRAM_IOS_SCOPES)
+    )
+  }
+  return (
+    input.resource === urls.mcpResource &&
+    isScopeSubset(input.scopes, ENGRAM_MCP_SCOPES)
+  )
+}
+
+function isScopeSubset(
+  requested: readonly string[],
+  allowed: readonly string[]
+): boolean {
+  const allowedSet = new Set<string>(allowed)
+  return requested.every((scope) => allowedSet.has(scope))
 }

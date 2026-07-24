@@ -36,6 +36,10 @@ type SessionResult = { user: { id: string } } | null
 type AuthenticationDependencies = {
   env?: Record<string, string | undefined>
   getSession?: (headers: Headers) => Promise<SessionResult>
+  verifyOAuth?: (
+    request: Request,
+    token: string
+  ) => Promise<AuthPrincipal | null>
 }
 
 function matchesSecret(supplied: string, expected: string): boolean {
@@ -80,8 +84,13 @@ export async function authenticateRequest(
       }
     }
 
-    // OAuth bearer verification is added behind AUTH_OAUTH_BEARER_ENABLED in
-    // Phase 2. Until then every other Authorization value fails closed.
+    if (env.AUTH_OAUTH_BEARER_ENABLED === "true") {
+      const verifyOAuth =
+        dependencies.verifyOAuth ??
+        (await import("./oauth-resource")).verifyOAuthBearerToken
+      return verifyOAuth(request, supplied)
+    }
+
     return null
   }
 

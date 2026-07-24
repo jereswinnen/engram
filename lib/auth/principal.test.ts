@@ -66,4 +66,34 @@ describe("authenticateRequest", () => {
     )
     expect(principal).toBeNull()
   })
+
+  it("uses OAuth verification only when the Phase 2 flag is enabled", async () => {
+    const verifyOAuth = vi.fn(async () => ({
+      userId: "user-a",
+      mechanism: "oauth" as const,
+      scopes: new Set(["recordings:write"]),
+      audience: "https://engram.example/api",
+      clientId: "engram-macos",
+      connectionId: "10000000-0000-4000-8000-000000000001",
+    }))
+    const request = new Request("https://engram.example/api/recordings", {
+      headers: { authorization: "Bearer oauth-token" },
+    })
+
+    await expect(
+      authenticateRequest(request, {
+        env: { AUTH_OAUTH_BEARER_ENABLED: "false" },
+        verifyOAuth,
+      })
+    ).resolves.toBeNull()
+    expect(verifyOAuth).not.toHaveBeenCalled()
+
+    await expect(
+      authenticateRequest(request, {
+        env: { AUTH_OAUTH_BEARER_ENABLED: "true" },
+        verifyOAuth,
+      })
+    ).resolves.toMatchObject({ mechanism: "oauth", userId: "user-a" })
+    expect(verifyOAuth).toHaveBeenCalledWith(request, "oauth-token")
+  })
 })

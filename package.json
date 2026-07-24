@@ -14,7 +14,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "auth:provision-clients": "pnpm dlx tsx@4.20.6 scripts/register-oauth-clients.ts",
+    "auth:cleanup-clients": "pnpm dlx tsx@4.20.6 scripts/cleanup-abandoned-oauth-clients.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.73",

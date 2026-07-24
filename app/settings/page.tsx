@@ -7,6 +7,8 @@ import { GlossarySettings } from "./glossary-settings"
 import { getBackups } from "@/lib/backup/store"
 import { Backups } from "./backups"
 import { ownerPredicate } from "@/lib/auth/ownership"
+import { listOAuthConnections } from "@/lib/auth/oauth-connection-store"
+import { OAuthConnections } from "./oauth-connections"
 
 export default async function SettingsPage({
   searchParams,
@@ -21,6 +23,7 @@ export default async function SettingsPage({
   })
   const glossary = await getGlossary(session.user.id)
   const backups = await getBackups(session.user.id)
+  const oauthConnections = await listOAuthConnections(session.user.id)
   return (
     <section className="mx-auto max-w-2xl space-y-6 p-6">
       <h1 className="text-2xl font-semibold">Settings</h1>
@@ -28,6 +31,18 @@ export default async function SettingsPage({
         connected={connected}
         lastResult={sync?.lastResult ?? null}
         oauthStatus={plaud ?? null}
+      />
+      <OAuthConnections
+        initial={oauthConnections.map((connection) => ({
+          id: connection.id,
+          label: connection.label,
+          clientId: connection.clientId,
+          status: connection.status,
+          scopes: connection.scopes,
+          createdAt: connection.createdAt.toISOString(),
+          lastUsedAt: connection.lastUsedAt?.toISOString() ?? null,
+          revokedAt: connection.revokedAt?.toISOString() ?? null,
+        }))}
       />
       <GlossarySettings
         entries={glossary.map((g) => ({

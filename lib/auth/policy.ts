@@ -56,22 +56,38 @@ export async function requirePrincipal(
   request: Request,
   policy: AuthPolicy = {}
 ): Promise<AuthPrincipal | Response> {
+  const pathname = new URL(request.url).pathname
+  const appUrl = (
+    process.env.BETTER_AUTH_URL ??
+    process.env.NEXT_PUBLIC_APP_URL ??
+    new URL(request.url).origin
+  ).replace(/\/+$/, "")
+  const effectivePolicy: AuthPolicy = {
+    ...policy,
+    resourceMetadataUrl:
+      policy.resourceMetadataUrl ??
+      (pathname.startsWith("/mcp")
+        ? `${appUrl}/.well-known/oauth-protected-resource/mcp`
+        : pathname.startsWith("/api/")
+          ? `${appUrl}/.well-known/oauth-protected-resource/api`
+          : undefined),
+  }
   const principal = await authenticateRequest(request)
-  if (!principal) return unauthorizedResponse(policy)
+  if (!principal) return unauthorizedResponse(effectivePolicy)
   if (principal.connectionId) {
     const { ensureActivePrincipalConnection } = await import("./connections")
     if (!(await ensureActivePrincipalConnection(principal))) {
-      return unauthorizedResponse(policy)
+      return unauthorizedResponse(effectivePolicy)
     }
   }
   if (policy.mechanisms && !policy.mechanisms.includes(principal.mechanism)) {
-    return forbiddenResponse(policy)
+    return forbiddenResponse(effectivePolicy)
   }
   if (policy.audience && principal.audience !== policy.audience) {
-    return unauthorizedResponse(policy)
+    return unauthorizedResponse(effectivePolicy)
   }
   if (policy.scopes && !hasScopes(principal, policy.scopes)) {
-    return forbiddenResponse(policy)
+    return forbiddenResponse(effectivePolicy)
   }
   return principal
 }

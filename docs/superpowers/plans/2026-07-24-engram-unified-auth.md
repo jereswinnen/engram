@@ -1,7 +1,7 @@
 # Engram Unified Authentication Implementation Plan
 
 **Date:** 2026-07-24
-**Status:** Phase 0 complete; Phase 1A deployed and ownership backfill audited; live behavior/soak gate pending
+**Status:** Phase 0 complete; Phase 1A deployed and audited; Phase 2 server foundation implemented behind a disabled production flag; staging lifecycle gate pending
 **Authority:** This is the source of truth for Engram authentication work until it is superseded by a newer dated plan.
 
 ## Goal
@@ -440,9 +440,9 @@ test: cover cross-owner authorization boundaries
 
 ### Steps
 
-- [ ] **Install the exact compatible packages selected in Phase 0.** Use pnpm and pin the OAuth Provider to the compatible Better Auth version.
-- [ ] **Generate and review OAuth schema.** Integrate the exact generated OAuth client, access token, refresh token, consent, code/verification, and signing-key fields required by the selected configuration. Generate a Drizzle migration; do not run production migration manually from a developer machine.
-- [ ] **Configure the provider in `auth.ts`.** Include:
+- [x] **Install the exact compatible packages selected in Phase 0.** Use pnpm and pin the OAuth Provider to the compatible Better Auth version.
+- [x] **Generate and review OAuth schema.** Integrate the exact generated OAuth client, access token, refresh token, consent, code/verification, and signing-key fields required by the selected configuration. Generate a Drizzle migration; do not run production migration manually from a developer machine.
+- [x] **Configure the provider in `auth.ts`.** Include:
   - required login and consent pages;
   - PKCE S256 for public clients;
   - exact valid API and MCP audiences;
@@ -451,17 +451,17 @@ test: cover cross-owner authorization boundaries
   - finite refresh grants, refresh rotation, and replay behavior only as actually supported by the pinned version;
   - an MCP registration scope allowlist that cannot request Mac write/delete scopes;
   - JWT/JWKS or introspection chosen deliberately, not implicitly.
-- [ ] **Persist and operate signing keys.** OAuth/JWT signing keys must survive deploys and multiple replicas, be included in backup/restore, and rotate with an overlap window. Test old and new tokens during overlap and retirement. Document Better Auth application-secret rotation separately from OAuth signing-key rotation.
-- [ ] **Pre-register the Mac client repeatably.** It is public (`token_endpoint_auth_method = none`), has exact redirects, and may skip repeated consent only if configured as an explicit trusted first-party client. Add an idempotent provider-admin script/task such as `scripts/register-oauth-clients.ts`; rerunning it must not replace the public client ID or invalidate existing grants.
-- [ ] **Build the consent flow.** Preserve the provider's signed OAuth query through login and consent. Never let `proxy.ts` drop `state`, `resource`, scope, PKCE, or redirect parameters. Consent text must plainly say when a client can search/read transcript content; dynamically supplied client names and logos are displayed as unverified metadata.
-- [ ] **Expose discovery metadata.** Ensure the real Next.js route topology serves authorization-server metadata and protected-resource metadata where RFC 8414/RFC 9728 and actual clients look for it.
-- [ ] **Update `proxy.ts`.** OAuth endpoints, callbacks, `.well-known` metadata, and later `/mcp` must reach their handlers rather than redirect to `/login`. Protected API routes must return machine-readable `401`, not HTML redirects.
-- [ ] **Implement resource verification.** Pin issuer, audience, signature/introspection, expiry/not-before, and scopes. Build shared `401` and insufficient-scope `403` responses.
-- [ ] **Add a Connections surface.** Settings shows client/connection, created/last-used time when available, scopes, and revoke. Lost-device revocation must work from the web.
-- [ ] **Make connection/audit persistence concrete.** Map verified provider grants to `authConnections`. If provider tables do not expose the promised label, last-use, client version, and per-grant revocation data, extend `authConnections` and add a bounded-retention `authEvents` table rather than fabricating those fields in the UI.
-- [ ] **Add safe observability.** Record auth outcome/reason, client ID, connection ID, client version where supplied, and refresh/revocation events. Never log credentials or transcript bodies.
-- [ ] **Rate-limit the complete auth surface.** Apply appropriate per-IP plus per-account/client controls to login, authorize, token/code exchange, refresh, revoke, dynamic registration, and MCP endpoints. Rate-limit failure paths without recording credential material.
-- [ ] **Add provider/security tests:**
+- [x] **Persist and operate signing keys.** OAuth/JWT signing keys must survive deploys and multiple replicas, be included in backup/restore, and rotate with an overlap window. Test old and new tokens during overlap and retirement. Document Better Auth application-secret rotation separately from OAuth signing-key rotation.
+- [x] **Pre-register the Mac client repeatably.** It is public (`token_endpoint_auth_method = none`), has exact redirects, and may skip repeated consent only if configured as an explicit trusted first-party client. Add an idempotent provider-admin script/task such as `scripts/register-oauth-clients.ts`; rerunning it must not replace the public client ID or invalidate existing grants.
+- [x] **Build the consent flow.** Preserve the provider's signed OAuth query through login and consent. Never let `proxy.ts` drop `state`, `resource`, scope, PKCE, or redirect parameters. Consent text must plainly say when a client can search/read transcript content; dynamically supplied client names and logos are displayed as unverified metadata.
+- [x] **Expose discovery metadata.** Ensure the real Next.js route topology serves authorization-server metadata and protected-resource metadata where RFC 8414/RFC 9728 and actual clients look for it.
+- [x] **Update `proxy.ts`.** OAuth endpoints, callbacks, `.well-known` metadata, and later `/mcp` must reach their handlers rather than redirect to `/login`. Protected API routes must return machine-readable `401`, not HTML redirects.
+- [x] **Implement resource verification.** Pin issuer, audience, signature/introspection, expiry/not-before, and scopes. Build shared `401` and insufficient-scope `403` responses.
+- [x] **Add a Connections surface.** Settings shows client/connection, created/last-used time when available, scopes, and revoke. Lost-device revocation must work from the web.
+- [x] **Make connection/audit persistence concrete.** Map verified provider grants to `authConnections`. If provider tables do not expose the promised label, last-use, client version, and per-grant revocation data, extend `authConnections` and add a bounded-retention `authEvents` table rather than fabricating those fields in the UI.
+- [x] **Add safe observability.** Record auth outcome/reason, client ID, connection ID, client version where supplied, and refresh/revocation events. Never log credentials or transcript bodies.
+- [ ] **Rate-limit the complete auth surface.** Login and all Phase 2 OAuth endpoints are rate-limited now. Apply the same policy to the `/mcp` transport when Phase 5 creates it, then close this item. Rate-limit failure paths without recording credential material.
+- [x] **Add provider/security tests:**
   - metadata is public, canonical, and exact;
   - authorization requires login;
   - PKCE S256 succeeds; missing/plain/wrong verifier fails;
@@ -475,6 +475,24 @@ test: cover cross-owner authorization boundaries
   - signing-key overlap/retirement behaves as documented;
   - repeated first-party-client provisioning is idempotent;
   - existing cookie login remains green.
+
+### Phase 2 implementation record (2026-07-24)
+
+- Generated the provider schema with the pinned `auth@1.6.20` CLI and integrated
+  only the reviewed additive provider tables in migration 0011.
+- OAuth discovery, provider endpoints, consent, and bearer acceptance all remain
+  gated by `AUTH_OAUTH_BEARER_ENABLED`; production remains `false` during the
+  staging gate. Existing web sessions and the legacy Mac token remain available.
+- The automated suite passes 194 tests across 44 files. The security contract
+  covers exact redirect handling, PKCE failure, code replay, signed consent-query
+  tampering, audience separation, scope challenges, DCR scope/URL rejection,
+  refresh rotation/revocation, and signing-key overlap/retirement.
+- TypeScript, the Next.js production build, and the unsigned macOS Debug regression
+  build pass. No Phase 2 migration or client provisioning command has been run
+  against production yet.
+- Remaining gate: deploy dark to staging, provision the Mac client there, enable
+  OAuth in staging, and perform a real browser login/code/refresh/API/revoke flow.
+  Keep production OAuth disabled until that succeeds.
 
 ### Verification
 

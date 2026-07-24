@@ -1,44 +1,46 @@
-"use client";
+"use client"
 
-import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { authClient } from "@/lib/auth-client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Suspense, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { authClient } from "@/lib/auth-client"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 
 function LoginForm() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setPending(true);
+    e.preventDefault()
+    setError(null)
+    setPending(true)
 
     const { error: signInError } = await authClient.signIn.email({
       email,
       password,
-    });
+    })
 
     if (signInError) {
-      setError(signInError.message ?? "Sign-in failed. Please try again.");
-      setPending(false);
-      return;
+      setError(signInError.message ?? "Sign-in failed. Please try again.")
+      setPending(false)
+      return
     }
 
-    const raw = searchParams.get("callbackUrl") ?? "";
-    const destination =
-      raw.startsWith("/") && !raw.startsWith("//") ? raw : "/";
-    router.push(destination);
-    router.refresh();
+    const oauthQuery = searchParams.get("sig") ? searchParams.toString() : null
+    const raw = oauthQuery
+      ? `/api/auth/oauth2/authorize?${oauthQuery}`
+      : (searchParams.get("callbackUrl") ?? "")
+    const destination = raw.startsWith("/") && !raw.startsWith("//") ? raw : "/"
+    router.push(destination)
+    router.refresh()
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
+    <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Engram</h1>
@@ -47,7 +49,9 @@ function LoginForm() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <label htmlFor="email" className="text-sm font-medium">Email address</label>
+            <label htmlFor="email" className="text-sm font-medium">
+              Email address
+            </label>
             <Input
               id="email"
               type="email"
@@ -60,7 +64,9 @@ function LoginForm() {
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="password" className="text-sm font-medium">Password</label>
+            <label htmlFor="password" className="text-sm font-medium">
+              Password
+            </label>
             <Input
               id="password"
               type="password"
@@ -72,9 +78,7 @@ function LoginForm() {
             />
           </div>
 
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
-          )}
+          {error && <p className="text-sm text-destructive">{error}</p>}
 
           <Button type="submit" className="w-full" disabled={pending}>
             {pending ? "Signing in…" : "Sign in"}
@@ -82,7 +86,7 @@ function LoginForm() {
         </form>
       </div>
     </div>
-  );
+  )
 }
 
 export default function LoginPage() {
@@ -90,5 +94,5 @@ export default function LoginPage() {
     <Suspense>
       <LoginForm />
     </Suspense>
-  );
+  )
 }

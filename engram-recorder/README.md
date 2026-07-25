@@ -23,9 +23,9 @@ keeps a recoverable local M4A, and uploads it directly to Engram.
 5. **Google Meet detection — complete.** Like Plaud, the app watches macOS power
    assertions for sustained WebRTC and browser-audio activity. It can ask before
    recording or automatically start and stop with the browser meeting.
-6. **OAuth rollout and real-meeting validation — pending.** Deploy the Phase 2 server
-   migration with OAuth enabled, sign the app with the intended Developer ID, then
-   exercise login, refresh, revoke, offline queues, and several real calls before
+6. **OAuth rollout and real-meeting validation — active.** Production browser sign-in,
+   recording, secure refresh-credential storage, and restoration after a real Mac app
+   quit/relaunch are verified. Complete the remaining lifecycle and short soak before
    removing the legacy server path or any Plaud code.
 
 ## Configure
@@ -34,8 +34,10 @@ keeps a recoverable local M4A, and uploads it directly to Engram.
    also permit HTTP on localhost for isolated development.
 2. Choose **Sign in to Engram**. The system browser completes login and returns to the
    app through `jeremys.engram.recorder://oauth/callback`.
-3. The refresh credential is stored per issuer, account, and client in the
-   device-only Data Protection Keychain. Access credentials remain in memory.
+3. The refresh credential is stored in an OAuth-specific Keychain record. Current
+   ad-hoc builds use the encrypted, non-synchronizing macOS login Keychain; properly
+   Developer-signed builds can migrate to the device-only Data Protection Keychain
+   after a verified durable copy. Access credentials remain in memory.
 4. Start with the menu-bar control or ⌘⇧R. Grant Microphone and Screen & System Audio
    Recording access when macOS asks.
 5. In Settings, choose whether meeting detection is Off, asks before recording, or

@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import Testing
 
 @testable import EngramAuthCore
@@ -60,6 +61,17 @@ func oauthCredentialPersistenceLocation() {
   // Ad-hoc Mac builds do not have a stable signed application identifier for
   // Data Protection Keychain items across process launches.
   #expect(KeychainStore.persistentOAuthCredentialUsesDataProtectionKeychain == false)
+  let query = KeychainStore.oauthCredentialQuery(useDataProtectionKeychain: false)
+  #expect(query[kSecUseDataProtectionKeychain as String] == nil)
+  #expect(query[kSecAttrSynchronizable as String] == nil)
+  let credential = StoredOAuthCredential(
+    issuer: "https://engram.example/api/auth",
+    accountID: "user-123",
+    connectionID: "connection-456",
+    clientID: EngramOAuthClient.clientID,
+    refreshToken: "refresh-token"
+  )
+  #expect(credential.keychainAccount == "https://engram.example/api/auth|engram-macos")
 }
 
 @Test("OAuth callback requires the original state and exact callback URL")

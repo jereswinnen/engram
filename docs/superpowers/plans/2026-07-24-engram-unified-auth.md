@@ -1,7 +1,7 @@
 # Engram Unified Authentication Implementation Plan
 
 **Date:** 2026-07-24
-**Status:** Phase 0 and Phase 1A complete; Phase 2 OAuth server deployed to production with MCP disabled and legacy rollback auth retained; Phase 3 production sign-in and recording succeeded, with restart persistence fix installed and relaunch verification pending
+**Status:** Phase 0 and Phase 1A complete; Phase 2 OAuth server deployed to production with MCP disabled and legacy rollback auth retained; Phase 3 production sign-in, recording, and OAuth persistence across a real quit/relaunch are verified; full lifecycle/soak remains before Phase 4
 **Authority:** This is the source of truth for Engram authentication work until it is superseded by a newer dated plan.
 
 ## Goal
@@ -86,7 +86,7 @@ OAuth must not be exposed to more clients until ownership and request-level auth
 | Ownership         | User-derived data is owner-scoped before OAuth/MCP expansion. True deployment configuration such as the storage backend may remain global.                                                                                  |
 | Migration         | Additive rollout: ownership + dual auth server, OAuth Mac release, soak, disable legacy token, later remove legacy code, then MCP.                                                                                          |
 | Revocation        | Connections/grants can be revoked from the web. "Disconnect this Mac" revokes server-side access before clearing local credentials.                                                                                         |
-| Token storage     | Native renewable refresh credentials go in device-only Keychain storage keyed by issuer + account + client. Rotate them when the pinned provider behavior has been verified. Access tokens are memory-only where practical. |
+| Token storage     | Native renewable refresh credentials go in Keychain storage. The ad-hoc Mac build uses one encrypted, non-synchronizing login-Keychain record per issuer + client, with account + connection bound in its encrypted payload; properly signed native builds use device-only Data Protection Keychain storage. Rotate credentials when the pinned provider behavior has been verified. Access tokens are memory-only where practical. |
 | Secrets           | Never embed a client secret in Mac/iOS. Never log tokens, authorization codes, PKCE verifiers, or transcript contents.                                                                                                      |
 
 ## Security Invariants
@@ -557,8 +557,8 @@ docs: document Engram OAuth deployment settings
 - Generate cryptographically random `state` and PKCE verifier; use S256 only.
 - Send `response_type=code`, exact `client_id`, redirect URI, scopes, and API `resource`.
 - Exchange the code with the original verifier using form-encoded OAuth requests.
-- Store refresh credentials keyed by issuer + account + client, never in one global `api-token` item.
-- For the current ad-hoc-signed macOS distribution, use the non-synchronizing login Keychain with `AfterFirstUnlockThisDeviceOnly`; a Data Protection Keychain write does not have a stable signed application identifier across relaunches. Keep access tokens memory-only. If a future signed distribution adopts the Data Protection Keychain, migrate only after a durable copy is saved and verify process-restart behavior on the shipped artifact.
+- Store refresh credentials in an OAuth-specific Keychain namespace, never in the legacy global `api-token` item. The current single-account Mac build uses a deterministic issuer + client locator and verifies the account + connection stored in the encrypted payload before accepting refreshed access.
+- For the current ad-hoc-signed macOS distribution, use the encrypted, non-synchronizing login Keychain through the macOS file-based Keychain API. Do not attach Data Protection-only accessibility attributes to that item. Keep access tokens memory-only. If a future properly signed distribution adopts the Data Protection Keychain, migrate only after a durable copy is saved and verify process-restart behavior on the shipped artifact.
 - Keep access tokens and expiry in memory when practical.
 - Serialize refresh in an actor/single-flight operation so concurrent queued uploads cannot race rotating refresh credentials.
 - Retry one authenticated request once after a refreshable `401`; never refresh-loop and never retry `403` as authentication failure.
@@ -587,14 +587,17 @@ docs: document Engram OAuth deployment settings
   state/callback validation, `ASWebAuthenticationSession`, code exchange, refresh,
   revocation, and an exact registered callback scheme. Release accepts only HTTPS;
   Debug additionally accepts HTTP on loopback hosts.
-- Refresh credentials are keyed by issuer, account, and client in a non-synchronizing,
-  device-only login-Keychain item with `AfterFirstUnlockThisDeviceOnly`. Earlier builds
-  preferred the Data Protection Keychain, but the ad-hoc release artifact has no stable
-  signed application identifier for persistence across process launches. A future
-  signed distribution may migrate only after saving and relaunch-verifying a durable
-  protected copy. Access credentials stay in memory. Refresh discovery/rotation is one
-  actor-managed single flight, and a rotated refresh credential is saved before the
-  new access credential is published.
+- The current ad-hoc release stores one OAuth-specific refresh record per issuer +
+  client in the encrypted, non-synchronizing macOS login Keychain. The account and
+  connection remain bound inside the encrypted credential and are revalidated after
+  refresh. The app uses the macOS file-based Keychain API because App Sandbox routes
+  modern `SecItem` calls to the Data Protection Keychain, whose default access group
+  requires the stable application identifier supplied by proper Developer signing.
+  Data Protection-only accessibility attributes are not applied to the login-Keychain
+  item. A future properly signed distribution may migrate only after saving and
+  relaunch-verifying a durable protected copy. Access credentials stay in memory.
+  Refresh discovery/rotation is one actor-managed single flight, and a rotated refresh
+  credential is saved before the new access credential is published.
 - The API client no longer accepts raw credentials. It retries one `401` after a
   forced refresh, never retries `403`, and still sends only presigned storage headers
   to R2.
@@ -620,12 +623,15 @@ docs: document Engram OAuth deployment settings
 - Production rollout applied the additive OAuth migration, provisioned the fixed Mac
   public client idempotently, enabled OAuth with MCP disabled, installed the OAuth Mac
   build with verified app/data rollback copies, and preserved legacy auth. The user
-  confirmed production browser sign-in and recording work. Relaunch then exposed that
-  the protected-Keychain write was not durable for the ad-hoc signature. The corrected
-  login-Keychain build passes all twelve native tests and a Release build, is installed,
-  and preserves all seven local archive entries/eight audio files. One sign-in followed
-  by a real quit/relaunch remains the release gate; legacy auth must remain enabled until
-  that passes and completes a short soak.
+  confirmed production browser sign-in and recording work. Relaunch then exposed an
+  `errSecParam` (`-50`) read failure: the ad-hoc sandboxed artifact had no provisioned
+  application identifier for the Data Protection Keychain. The corrected login-Keychain
+  compatibility build passes all twelve native tests and a Release build. On the
+  installed artifact, sign-in inserted the encrypted refresh record with status `0`; a
+  real quit/relaunch read it with status `0` and decoded exactly one credential. All
+  seven local archive entries and seven M4A files remain present (six uploaded, one
+  failed and deliberately untouched). Legacy auth remains enabled for the short soak
+  and the remaining full recording lifecycle gate.
 
 ### Verification matrix
 

@@ -24,9 +24,9 @@ keeps a recoverable local M4A, and uploads it directly to Engram.
    assertions for sustained WebRTC and browser-audio activity. It can ask before
    recording or automatically start and stop with the browser meeting.
 6. **OAuth rollout and real-meeting validation — active.** Production browser sign-in,
-   recording, secure refresh-credential storage, and restoration after a real Mac app
-   quit/relaunch are verified. Complete the remaining lifecycle and short soak before
-   removing the legacy server path or any Plaud code.
+   recording, secure refresh-credential storage, restoration after a real Mac app
+   quit/relaunch, refresh rotation, and post-relaunch upload are verified. Complete the
+   short safety soak before disabling the legacy server path; remove it only later.
 
 ## Configure
 

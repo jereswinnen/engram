@@ -1,7 +1,7 @@
 # Engram Unified Authentication Implementation Plan
 
 **Date:** 2026-07-24
-**Status:** Phase 0 and Phase 1A complete; Phase 2 OAuth server deployed to production with MCP disabled and legacy rollback auth retained; Phase 3 production sign-in, recording, and OAuth persistence across a real quit/relaunch are verified; full lifecycle/soak remains before Phase 4
+**Status:** Phase 0 and Phase 1A complete; Phase 2 OAuth server deployed to production with MCP disabled and legacy rollback auth retained; Phase 3 production sign-in, quit/relaunch restoration, refresh rotation, and post-relaunch recording upload are verified; the safety soak is active before Phase 4
 **Authority:** This is the source of truth for Engram authentication work until it is superseded by a newer dated plan.
 
 ## Goal
@@ -630,8 +630,11 @@ docs: document Engram OAuth deployment settings
   installed artifact, sign-in inserted the encrypted refresh record with status `0`; a
   real quit/relaunch read it with status `0` and decoded exactly one credential. All
   seven local archive entries and seven M4A files remain present (six uploaded, one
-  failed and deliberately untouched). Legacy auth remains enabled for the short soak
-  and the remaining full recording lifecycle gate.
+  failed at that checkpoint). The subsequent post-relaunch recording test restored the
+  credential, refreshed it, persisted the rotated refresh credential with status `0`,
+  and uploaded successfully. The archive then contained eight uploaded entries and
+  eight M4A files. Legacy auth remains enabled for the short safety soak and the
+  remaining destructive/offline lifecycle checks.
 
 ### Verification matrix
 
@@ -838,7 +841,7 @@ Flags default off until their phase gate is satisfied. Remove each temporary fla
 - [ ] Discovery metadata resolves from production URLs without browser redirects.
 - [ ] Authorization Code + PKCE S256 succeeds; missing/plain/wrong PKCE fails.
 - [ ] API token fails at MCP and MCP token fails at API.
-- [ ] Refresh after process restart succeeds.
+- [x] Refresh after process restart succeeds.
 - [ ] Revocation blocks refresh and has the documented effect on already-issued access tokens.
 
 ### Mac

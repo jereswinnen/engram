@@ -161,7 +161,8 @@ export async function listEmbeddingBackfillCandidates(
       SELECT DISTINCT ON (r.id)
              r.id AS recording_id,
              r.owner_id AS owner_id,
-             t.id AS transcription_id
+             t.id AS transcription_id,
+             t.full_text AS full_text
       FROM recordings r
       JOIN transcriptions t ON t.recording_id = r.id
       WHERE r.owner_id IS NOT NULL
@@ -170,7 +171,8 @@ export async function listEmbeddingBackfillCandidates(
     )
     SELECT latest.recording_id, latest.owner_id
     FROM latest_transcriptions latest
-    WHERE NOT EXISTS (
+    WHERE length(trim(latest.full_text)) > 0
+      AND NOT EXISTS (
       SELECT 1
       FROM transcript_embeddings embedding
       WHERE embedding.transcription_id = latest.transcription_id

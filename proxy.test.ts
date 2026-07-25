@@ -14,6 +14,13 @@ describe("proxy bearer-auth route bypasses", () => {
     expect(response.headers.get("location")).toBeNull()
   })
 
+  it("allows shared search to issue its own session or OAuth challenge", () => {
+    const response = proxy(request("/api/search?q=meeting", "GET"))
+
+    expect(response.headers.get("x-middleware-next")).toBe("1")
+    expect(response.headers.get("location")).toBeNull()
+  })
+
   it("allows recorder deletions to perform their own authorization", () => {
     const response = proxy(
       request(

@@ -13,7 +13,9 @@ function parseOptions(args: string[]): Options {
   const options: Options = { dryRun: false, limit: 10 }
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
-    if (arg === "--dry-run") {
+    if (arg === "--") {
+      continue
+    } else if (arg === "--dry-run") {
       options.dryRun = true
     } else if (arg === "--limit") {
       const value = Number(args[index + 1])

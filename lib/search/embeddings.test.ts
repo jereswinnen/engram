@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { PgDialect } from "drizzle-orm/pg-core"
 
 const getOwnedRecording = vi.hoisted(() => vi.fn())
 const findFirst = vi.hoisted(() => vi.fn())
@@ -106,5 +107,16 @@ describe("transcript embeddings", () => {
     ).rejects.toThrow("recording recording-a not found")
     expect(findFirst).not.toHaveBeenCalled()
     expect(embedMany).not.toHaveBeenCalled()
+  })
+
+  it("does not repeatedly select empty transcripts for backfill", async () => {
+    execute.mockResolvedValueOnce([])
+    const { listEmbeddingBackfillCandidates } = await import("./embeddings")
+
+    await listEmbeddingBackfillCandidates({ limit: 5 })
+
+    const statement = execute.mock.calls[0][0]
+    const rendered = new PgDialect().sqlToQuery(statement).sql
+    expect(rendered).toContain("length(trim(latest.full_text)) > 0")
   })
 })

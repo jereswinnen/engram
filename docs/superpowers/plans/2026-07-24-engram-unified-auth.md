@@ -1,7 +1,7 @@
 # Engram Unified Authentication Implementation Plan
 
 **Date:** 2026-07-24
-**Status:** Phase 0 complete; Phase 1A deployed and audited; Phase 2 server foundation and isolated local lifecycle gate complete behind a disabled production flag; Phase 3 Mac browser auth and disconnect verified locally, with the storage-backed recording lifecycle and rollout still pending
+**Status:** Phase 0 and Phase 1A complete; Phase 2 OAuth server deployed to production with MCP disabled and legacy rollback auth retained; Phase 3 production sign-in and recording succeeded, with restart persistence fix installed and relaunch verification pending
 **Authority:** This is the source of truth for Engram authentication work until it is superseded by a newer dated plan.
 
 ## Goal
@@ -558,7 +558,7 @@ docs: document Engram OAuth deployment settings
 - Send `response_type=code`, exact `client_id`, redirect URI, scopes, and API `resource`.
 - Exchange the code with the original verifier using form-encoded OAuth requests.
 - Store refresh credentials keyed by issuer + account + client, never in one global `api-token` item.
-- For macOS device-only accessibility, use the Data Protection Keychain and the most restrictive accessibility that still permits the recorder's background behavior. Locally signed builds that receive `errSecMissingEntitlement` may fall back only to the non-synchronizing login Keychain with the same device-only accessibility; migrate the credential only after a protected copy is saved successfully. Validate the exact Keychain attributes on supported macOS versions.
+- For the current ad-hoc-signed macOS distribution, use the non-synchronizing login Keychain with `AfterFirstUnlockThisDeviceOnly`; a Data Protection Keychain write does not have a stable signed application identifier across relaunches. Keep access tokens memory-only. If a future signed distribution adopts the Data Protection Keychain, migrate only after a durable copy is saved and verify process-restart behavior on the shipped artifact.
 - Keep access tokens and expiry in memory when practical.
 - Serialize refresh in an actor/single-flight operation so concurrent queued uploads cannot race rotating refresh credentials.
 - Retry one authenticated request once after a refreshable `401`; never refresh-loop and never retry `403` as authentication failure.
@@ -587,10 +587,11 @@ docs: document Engram OAuth deployment settings
   state/callback validation, `ASWebAuthenticationSession`, code exchange, refresh,
   revocation, and an exact registered callback scheme. Release accepts only HTTPS;
   Debug additionally accepts HTTP on loopback hosts.
-- Refresh credentials are keyed by issuer, account, and client in the Data Protection
-  Keychain with `AfterFirstUnlockThisDeviceOnly`. Locally signed builds without the
-  Data Protection Keychain entitlement use an explicit non-synchronizing, device-only
-  login-Keychain fallback; a future entitled build migrates only after saving the
+- Refresh credentials are keyed by issuer, account, and client in a non-synchronizing,
+  device-only login-Keychain item with `AfterFirstUnlockThisDeviceOnly`. Earlier builds
+  preferred the Data Protection Keychain, but the ad-hoc release artifact has no stable
+  signed application identifier for persistence across process launches. A future
+  signed distribution may migrate only after saving and relaunch-verifying a durable
   protected copy. Access credentials stay in memory. Refresh discovery/rotation is one
   actor-managed single flight, and a rotated refresh credential is saved before the
   new access credential is published.
@@ -601,12 +602,12 @@ docs: document Engram OAuth deployment settings
   decode with a nil binding; upload requires an explicit Attach & Upload confirmation.
   A differing binding requires an explicit reassignment confirmation, and unbound
   legacy remote recordings remain browser-delete-only.
-- The extracted Swift package currently passes eleven native tests covering RFC 7636
+- The extracted Swift package currently passes twelve native tests covering RFC 7636
   PKCE, authorization request binding, callback/state validation, access identity,
   concurrent single refresh, rotated credential persistence, bounded `401` retry,
   no `403` retry, authenticated current-connection revocation, legacy archive decoding,
   disconnect failure/retry recovery, and server/account/connection binding. (Swift
-  Testing reports nine auth tests plus two archive tests.)
+  Testing reports ten auth tests plus two archive tests.)
 - The real `ASWebAuthenticationSession` flow passed against the isolated localhost
   server with a synthetic user: discovery, system-browser login, callback, code
   exchange, signed-in identity, renewable credential storage, Disconnect, server-side
@@ -616,11 +617,15 @@ docs: document Engram OAuth deployment settings
   than revoking only one refresh token. Database inspection confirmed both the
   connection and refresh credential were revoked. The installed app, production data,
   and production flags were not changed.
-- Remaining Phase 3 gate: exercise the storage-backed recording lifecycle against an
-  OAuth-enabled environment with working
-  object storage. The local test server deliberately used placeholder R2 credentials,
-  so recording/upload was not attempted. Debug and Release builds pass. Production
-  remains disabled and unchanged until that rollout is intentionally started.
+- Production rollout applied the additive OAuth migration, provisioned the fixed Mac
+  public client idempotently, enabled OAuth with MCP disabled, installed the OAuth Mac
+  build with verified app/data rollback copies, and preserved legacy auth. The user
+  confirmed production browser sign-in and recording work. Relaunch then exposed that
+  the protected-Keychain write was not durable for the ad-hoc signature. The corrected
+  login-Keychain build passes all twelve native tests and a Release build, is installed,
+  and preserves all seven local archive entries/eight audio files. One sign-in followed
+  by a real quit/relaunch remains the release gate; legacy auth must remain enabled until
+  that passes and completes a short soak.
 
 ### Verification matrix
 

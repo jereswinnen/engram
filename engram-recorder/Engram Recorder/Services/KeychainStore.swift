@@ -6,6 +6,9 @@ enum KeychainStore {
   private static let service = "jeremys.engram.recorder"
   private static let legacyService = "com.jereswinnen.engram.recorder"
   private static let oauthService = "jeremys.engram.recorder.oauth"
+  // Keep this explicit and testable: the current ad-hoc Mac distribution has
+  // no stable application identifier for durable Data Protection Keychain use.
+  static let persistentOAuthCredentialUsesDataProtectionKeychain = false
 
   static func readToken() -> String {
     if let token = readToken(service: service) {
@@ -77,41 +80,49 @@ enum KeychainStore {
   }
 
   static func readOAuthCredential(issuer: URL) -> StoredOAuthCredential? {
-    let protected = readOAuthCredentials(useDataProtectionKeychain: true)
-    if protected.status == errSecSuccess,
-      let credential = matchingCredential(in: protected.values, issuer: issuer)
+    // The app is currently distributed with an ad-hoc signature. A Data
+    // Protection Keychain write can appear to succeed without a stable signed
+    // application identifier and then become unreadable after the process exits.
+    // The non-synchronizing login Keychain is durable across those relaunches,
+    // and ThisDeviceOnly keeps the renewable credential on this Mac.
+    let login = readOAuthCredentials(
+      useDataProtectionKeychain: persistentOAuthCredentialUsesDataProtectionKeychain
+    )
+    if login.status == errSecSuccess,
+      let credential = matchingCredential(in: login.values, issuer: issuer)
     {
       return credential
     }
-    guard protected.status == errSecSuccess || protected.status == errSecItemNotFound
-      || protected.status == errSecMissingEntitlement
+    guard login.status == errSecSuccess || login.status == errSecItemNotFound
     else { return nil }
 
-    let fallback = readOAuthCredentials(useDataProtectionKeychain: false)
-    guard fallback.status == errSecSuccess,
-      let credential = matchingCredential(in: fallback.values, issuer: issuer)
+    // Migrate credentials written by an earlier entitled/protected build only
+    // after the durable login-Keychain copy succeeds.
+    let protected = readOAuthCredentials(useDataProtectionKeychain: true)
+    guard protected.status == errSecSuccess,
+      let credential = matchingCredential(in: protected.values, issuer: issuer)
     else { return nil }
-
-    // A locally signed build may need the non-syncing login Keychain. Once a
-    // properly entitled release is installed, migrate only after the protected
-    // copy has been saved successfully.
-    if protected.status != errSecMissingEntitlement {
-      do {
-        try writeOAuthCredential(credential, useDataProtectionKeychain: true)
-        _ = deleteOAuthCredential(credential, useDataProtectionKeychain: false)
-      } catch {
-        // The existing device-only credential remains the source of truth.
-      }
+    do {
+      try writeOAuthCredential(
+        credential,
+        useDataProtectionKeychain: persistentOAuthCredentialUsesDataProtectionKeychain
+      )
+      _ = deleteOAuthCredential(
+        credential,
+        useDataProtectionKeychain: !persistentOAuthCredentialUsesDataProtectionKeychain
+      )
+    } catch {
+      // The protected credential remains available to this process. A later
+      // rotated-token save will surface a durable-store failure to the user.
     }
     return credential
   }
 
   static func saveOAuthCredential(_ credential: StoredOAuthCredential) throws {
-    do {
-      try writeOAuthCredential(credential, useDataProtectionKeychain: true)
-    } catch let error as KeychainError where error.status == errSecMissingEntitlement {
-      try writeOAuthCredential(credential, useDataProtectionKeychain: false)
-    }
+    try writeOAuthCredential(
+      credential,
+      useDataProtectionKeychain: persistentOAuthCredentialUsesDataProtectionKeychain
+    )
   }
 
   static func deleteOAuthCredential(_ credential: StoredOAuthCredential) throws {

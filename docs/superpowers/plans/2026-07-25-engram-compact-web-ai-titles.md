@@ -56,6 +56,16 @@ This rollout keeps the existing authentication and recording pipeline intact whi
 - [ ] Verify Railway migration and deployment.
 - [ ] Smoke-test one new Mac recording end to end before removing any compatibility code.
 
+## Phase 6 — Production refinements
+
+- [x] Audit the recordings that did not visibly adopt generated titles.
+- [x] Confirm all prior titles remain preserved before widening conversion.
+- [x] Remove generated-title badges and sparkle provenance from the interface.
+- [x] Remove manual upload from navigation and redirect the retired page.
+- [x] Group multiple active OAuth grants into one connected-app entry.
+- [ ] Run web, API, migration, and browser verification.
+- [ ] Merge and verify the Railway deployment.
+
 ## Rollback
 
 Rolling back the application does not require rolling back data. The migration only adds columns and updates replaceable Mac titles after copying the prior title into `original_title`. A follow-up rollback can restore generated rows with:

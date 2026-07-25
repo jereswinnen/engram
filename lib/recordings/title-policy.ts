@@ -9,6 +9,7 @@ export type RecordingTitleOrigin =
 const REPLACEABLE_TITLE_ORIGINS = new Set<RecordingTitleOrigin>([
   "filename",
   "device",
+  "provider",
   "generated",
 ])
 

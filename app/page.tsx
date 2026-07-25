@@ -1,7 +1,9 @@
 import Link from "next/link"
 import {
   RiArrowRightSLine,
-  RiFolderMusicLine,
+  RiArchiveLine,
+  RiMicLine,
+  RiMore2Line,
   RiTimeLine,
 } from "@remixicon/react"
 import { requireSession } from "@/lib/auth-guard"
@@ -16,20 +18,27 @@ export default async function HomePage() {
   const recs = await listOwnedRecordings(session.user.id)
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 lg:px-6">
-      <div className="mb-4">
+    <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+      <header className="mb-6 flex items-end justify-between gap-4 border-b pb-5">
         <div>
-          <h1 className="text-xl font-semibold tracking-[-0.02em]">Library</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
+          <p className="mb-1 text-xs font-medium text-muted-foreground">
+            Your workspace
+          </p>
+          <h1 className="text-2xl font-semibold tracking-[-0.035em]">
+            Library
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             {recs.length} {recs.length === 1 ? "recording" : "recordings"}
           </p>
         </div>
-      </div>
+      </header>
 
       {recs.length === 0 ? (
-        <div className="grid min-h-64 place-items-center rounded-xl border border-dashed p-6 text-center">
+        <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed bg-card p-6 text-center">
           <div>
-            <RiFolderMusicLine className="mx-auto mb-3 size-7 text-muted-foreground" />
+            <span className="mx-auto mb-4 grid size-10 place-items-center rounded-xl bg-muted">
+              <RiArchiveLine className="size-5 text-muted-foreground" />
+            </span>
             <p className="font-medium">No recordings yet</p>
             <p className="mt-1 text-sm text-muted-foreground">
               Record from the Mac app to add your first recording.
@@ -37,49 +46,56 @@ export default async function HomePage() {
           </div>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
+        <div className="overflow-hidden rounded-xl border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.025)]">
+          <div className="hidden grid-cols-[minmax(0,1fr)_9rem_7rem_2rem] gap-4 border-b bg-muted/35 px-4 py-2 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase sm:grid">
+            <span>Recording</span>
+            <span>Date</span>
+            <span>Duration</span>
+            <span className="sr-only">Open</span>
+          </div>
           {recs.map((rec) => (
             <Link
               key={rec.id}
               href={`/recordings/${rec.id}`}
-              className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b px-3 py-3 transition-colors last:border-b-0 hover:bg-muted/45 sm:px-4"
+              className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b px-3 py-3 transition-colors last:border-b-0 hover:bg-muted/40 sm:grid-cols-[minmax(0,1fr)_9rem_7rem_2rem] sm:gap-4 sm:px-4"
             >
-              <span className="grid size-8 place-items-center rounded-lg bg-muted text-muted-foreground">
-                <RiFolderMusicLine className="size-4" />
-              </span>
               <span className="min-w-0">
-                <span className="flex items-center gap-1.5">
-                  <span className="truncate text-sm font-medium">
-                    {rec.title}
-                  </span>
+                <span className="block truncate text-sm font-medium tracking-[-0.01em]">
+                  {rec.title}
                 </span>
-                <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground sm:hidden">
+                  <RiMicLine className="size-3" />
+                  <span className="capitalize">{rec.source}</span>
+                  <span aria-hidden>·</span>
                   <span>
                     {new Date(rec.createdAt).toLocaleDateString("en-GB", {
-                      day: "2-digit",
+                      day: "numeric",
                       month: "short",
-                      year: "numeric",
                     })}
                   </span>
-                  {rec.durationSeconds != null && (
-                    <span className="inline-flex items-center gap-1 tabular-nums">
-                      <RiTimeLine className="size-3" />
-                      {duration(rec.durationSeconds)}
-                    </span>
-                  )}
-                  <span className="capitalize">{rec.source}</span>
                 </span>
               </span>
-              <span className="flex items-center gap-2">
-                <span className="hidden rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground capitalize sm:inline">
-                  {rec.status.replaceAll("_", " ")}
-                </span>
-                <RiArrowRightSLine className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+              <span className="hidden text-xs text-muted-foreground sm:block">
+                {new Date(rec.createdAt).toLocaleDateString("en-GB", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </span>
+              <span className="hidden items-center gap-1.5 text-xs text-muted-foreground tabular-nums sm:flex">
+                <RiTimeLine className="size-3.5" />
+                {rec.durationSeconds != null
+                  ? duration(rec.durationSeconds)
+                  : "—"}
+              </span>
+              <span className="flex items-center justify-end">
+                <RiArrowRightSLine className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground sm:hidden" />
+                <RiMore2Line className="hidden size-4 text-muted-foreground group-hover:text-foreground sm:block" />
               </span>
             </Link>
           ))}
         </div>
       )}
-    </div>
+    </main>
   )
 }

@@ -22,13 +22,13 @@ export function SearchBox({ initialQuery }: { initialQuery: string }) {
         value={q}
         onChange={(e) => setQ(e.target.value)}
         autoFocus
-        className="h-10 pr-24 pl-9"
+        className="h-11 rounded-xl border-border bg-card pr-24 pl-10 shadow-[0_1px_2px_rgba(0,0,0,0.025)]"
       />
       <Button
         type="submit"
         size="sm"
         disabled={q.trim().length === 0}
-        className="absolute top-1.5 right-1.5"
+        className="absolute top-2 right-2 rounded-lg"
       >
         <RiSearchLine data-icon="inline-start" />
         Search

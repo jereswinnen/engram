@@ -40,12 +40,17 @@ export function OAuthConnections({ initial }: { initial: Connection[] }) {
   }
 
   return (
-    <section className="space-y-4 rounded-lg border p-4">
-      <div>
-        <h2 className="font-medium">Connected apps</h2>
-        <p className="text-sm text-muted-foreground">
-          Manage apps that can access your Engram account.
-        </p>
+    <section className="space-y-4 rounded-xl border bg-card p-5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+      <div className="flex items-start gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+          <RiAppsLine className="size-4" />
+        </span>
+        <div>
+          <h2 className="text-sm font-medium">Connected apps</h2>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            Manage apps that can access your Engram account.
+          </p>
+        </div>
       </div>
 
       {groups.length === 0 ? (
@@ -53,11 +58,11 @@ export function OAuthConnections({ initial }: { initial: Connection[] }) {
           No OAuth apps have been connected yet.
         </p>
       ) : (
-        <ul className="space-y-3">
+        <ul className="divide-y rounded-lg border">
           {groups.map((connection) => (
             <li
               key={connection.key}
-              className="rounded-lg border bg-background p-3"
+              className="bg-background/55 p-3 first:rounded-t-lg last:rounded-b-lg"
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex min-w-0 items-start gap-3">
@@ -65,7 +70,7 @@ export function OAuthConnections({ initial }: { initial: Connection[] }) {
                     <AppIcon clientId={connection.clientId} />
                   </span>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium">{connection.label}</p>
+                    <p className="text-xs font-medium">{connection.label}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {connection.lastUsedAt
                         ? `Last used ${new Date(connection.lastUsedAt).toLocaleString()}`
@@ -75,7 +80,7 @@ export function OAuthConnections({ initial }: { initial: Connection[] }) {
                 </div>
                 <Button
                   variant="outline"
-                  size="sm"
+                  size="xs"
                   disabled={pendingKey === connection.key}
                   onClick={() => revoke(connection.key, connection.ids)}
                 >
@@ -87,7 +92,7 @@ export function OAuthConnections({ initial }: { initial: Connection[] }) {
                   {connection.scopes.map((scope) => (
                     <span
                       key={scope}
-                      className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+                      className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
                     >
                       {scope}
                     </span>

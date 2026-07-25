@@ -72,6 +72,20 @@ public struct UploadResult: Decodable, Sendable {
   }
 }
 
+public struct RemoteRecordingMetadata: Decodable, Sendable {
+  public let id: String
+  public let title: String
+  public let titleOrigin: String
+  public let status: String
+
+  public init(id: String, title: String, titleOrigin: String, status: String) {
+    self.id = id
+    self.title = title
+    self.titleOrigin = titleOrigin
+    self.status = status
+  }
+}
+
 enum RecorderError: LocalizedError {
   case settingsIncomplete
   case microphonePermissionDenied

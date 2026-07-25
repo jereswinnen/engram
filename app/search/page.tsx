@@ -2,6 +2,7 @@ import Link from "next/link"
 import { requireSession } from "@/lib/auth-guard"
 import { searchRecordings } from "@/lib/search/search"
 import { SearchBox } from "./search-box"
+import { RiSearchAiLine, RiSparkling2Line, RiTimeLine } from "@remixicon/react"
 
 function formatTime(seconds: number): string {
   const minutes = Math.floor(seconds / 60)
@@ -32,9 +33,9 @@ export default async function SearchPage({
   )
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
+    <div className="mx-auto flex max-w-5xl flex-col gap-5 px-4 py-6 lg:px-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold">Search</h1>
+        <h1 className="text-xl font-semibold tracking-[-0.02em]">Search</h1>
         <p className="text-sm text-muted-foreground">
           Search by exact words or describe what was discussed.
         </p>
@@ -42,24 +43,35 @@ export default async function SearchPage({
       <SearchBox initialQuery={q} />
 
       {query && page.results.length === 0 && (
-        <p className="text-sm text-muted-foreground">No matches.</p>
+        <div className="grid min-h-48 place-items-center rounded-xl border border-dashed text-center">
+          <div>
+            <RiSearchAiLine className="mx-auto mb-2 size-6 text-muted-foreground" />
+            <p className="text-sm font-medium">No matches</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Try a broader phrase or a different topic.
+            </p>
+          </div>
+        </div>
       )}
 
-      <ul className="flex flex-col gap-6">
+      <ul className="flex flex-col gap-3">
         {recordings.map(({ hit, passages }) => (
-          <li key={hit.recordingId} className="flex flex-col gap-2">
+          <li
+            key={hit.recordingId}
+            className="overflow-hidden rounded-xl border bg-card"
+          >
             <Link
               href={`/recordings/${hit.recordingId}`}
-              className="hover:underline"
+              className="block border-b px-4 py-3 transition-colors hover:bg-muted/40"
             >
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium">{hit.title}</span>
               </div>
-              <div className="text-xs text-muted-foreground">
+              <div className="mt-0.5 text-xs text-muted-foreground">
                 {new Date(hit.createdAt).toLocaleDateString("en-GB")}
               </div>
             </Link>
-            <ul className="flex flex-col gap-2 border-l pl-3">
+            <ul className="divide-y">
               {passages.slice(0, 3).map((passage) => (
                 <li key={passage.passageId}>
                   <Link
@@ -68,14 +80,18 @@ export default async function SearchPage({
                         ? ""
                         : `&t=${passage.startSeconds}`
                     }`}
-                    className="group block"
+                    className="group block px-4 py-3 transition-colors hover:bg-muted/35"
                   >
                     <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground group-hover:text-foreground">
                       {passage.startSeconds !== null && (
-                        <span>{formatTime(passage.startSeconds)}</span>
+                        <span className="inline-flex items-center gap-1 tabular-nums">
+                          <RiTimeLine className="size-3" />
+                          {formatTime(passage.startSeconds)}
+                        </span>
                       )}
                       {passage.matchType !== "keyword" && (
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px]">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-primary/8 px-2 py-0.5 text-[11px] text-primary">
+                          <RiSparkling2Line className="size-3" />
                           {passage.matchType === "hybrid"
                             ? "Strong match"
                             : "Related meaning"}

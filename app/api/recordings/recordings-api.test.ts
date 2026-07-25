@@ -98,6 +98,8 @@ describe("POST /api/recordings", () => {
     expect(calls.inserts).toEqual([
       expect.objectContaining({
         title: "Weekly sync",
+        originalTitle: "Weekly sync",
+        titleOrigin: "device",
         source: "mac",
         ownerId: "user-1",
         createdByConnectionId: "00000000-0000-4000-8000-000000000001",
@@ -134,11 +136,30 @@ describe("POST /api/recordings", () => {
     expect(response.status).toBe(201)
     expect(calls.inserts[0]).toMatchObject({
       title: "meeting.m4a",
+      originalTitle: "meeting.m4a",
+      titleOrigin: "filename",
       source: "upload",
       ownerId: "user-1",
       durationSeconds: null,
     })
     expect(calls.inserts[0]).not.toHaveProperty("createdAt")
+  })
+
+  it("protects an explicit browser title from generated replacement", async () => {
+    const { auth } = await import("@/auth")
+    vi.mocked(auth.api.getSession).mockResolvedValueOnce({
+      user: { id: "user-1" },
+    } as never)
+    const { POST } = await import("./route")
+
+    const response = await POST(uploadRequest({ title: "My project update" }) as never)
+
+    expect(response.status).toBe(201)
+    expect(calls.inserts[0]).toMatchObject({
+      title: "My project update",
+      originalTitle: "My project update",
+      titleOrigin: "user",
+    })
   })
 
   it("rejects unauthenticated uploads before parsing or storing them", async () => {

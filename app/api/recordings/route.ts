@@ -12,6 +12,7 @@ const MAX_DURATION_SECONDS = 2_147_483_647
 type RecordingUploadInput = {
   file: File
   title: string
+  titleOrigin: "user" | "filename"
   source: "upload" | "mac"
   durationSeconds: number | null
   startedAt: Date | null
@@ -67,6 +68,7 @@ export function parseRecordingUpload(form: FormData): ParseResult {
     input: {
       file,
       title: stringField(form, "title") || file.name,
+      titleOrigin: stringField(form, "title") ? "user" : "filename",
       source: requestedSource === "mac" ? "mac" : "upload",
       durationSeconds,
       startedAt,
@@ -98,7 +100,7 @@ export async function POST(req: NextRequest) {
   if ("error" in parsed) {
     return NextResponse.json({ error: parsed.error }, { status: 400 })
   }
-  const { file, title, durationSeconds, startedAt } = parsed.input
+  const { file, title, titleOrigin, durationSeconds, startedAt } = parsed.input
   // `source` is provenance, not a client-controlled authorization field.
   const source = principal.mechanism === "session" ? "upload" : "mac"
 
@@ -108,6 +110,8 @@ export async function POST(req: NextRequest) {
       ownerId: principal.userId,
       createdByConnectionId: principal.connectionId,
       title,
+      originalTitle: title,
+      titleOrigin: source === "mac" ? "device" : titleOrigin,
       source,
       storageKey: "pending",
       contentType: file.type || "application/octet-stream",

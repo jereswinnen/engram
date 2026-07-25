@@ -105,6 +105,21 @@ actor EngramAPIClient {
     }
   }
 
+  func recordingMetadata(
+    remoteID: String,
+    serverURL: URL
+  ) async throws -> RemoteRecordingMetadata {
+    let endpoint =
+      recordingsEndpoint(serverURL: serverURL)
+      .appendingPathComponent(remoteID, isDirectory: false)
+    let (data, response) = try await authenticatedData(
+      for: URLRequest(url: endpoint),
+      serverURL: serverURL
+    )
+    try validate(response: response, data: data, service: "Engram")
+    return try JSONDecoder().decode(RemoteRecordingMetadata.self, from: data)
+  }
+
   private func recordingsEndpoint(serverURL: URL) -> URL {
     serverURL
       .appendingPathComponent("api", isDirectory: true)

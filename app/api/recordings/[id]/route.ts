@@ -9,6 +9,30 @@ import {
 } from "@/lib/recordings/store"
 import { getStorage } from "@/lib/storage"
 
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const principal = await requirePrincipal(request, {
+    scopes: ["recordings:write"],
+    mechanisms: ["legacy-mac", "oauth"],
+  })
+  if (isAuthFailure(principal)) return principal
+
+  const { id } = await params
+  const recording = await getOwnedRecording(principal.userId, id)
+  if (!recording || !recordingBelongsToConnection(recording, principal)) {
+    return NextResponse.json({ error: "Recording not found" }, { status: 404 })
+  }
+
+  return NextResponse.json({
+    id: recording.id,
+    title: recording.title,
+    titleOrigin: recording.titleOrigin,
+    status: recording.status,
+  })
+}
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

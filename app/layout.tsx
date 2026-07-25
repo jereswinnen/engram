@@ -1,60 +1,55 @@
 import { Geist_Mono, DM_Sans } from "next/font/google"
-import Link from "next/link"
+import { headers } from "next/headers"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
-import { LogoutButton } from "@/components/logout-button"
-import { cn } from "@/lib/utils";
+import { AppHeader } from "@/components/app-header"
+import { auth } from "@/auth"
+import { cn } from "@/lib/utils"
 
-const dmSans = DM_Sans({subsets:['latin'],variable:'--font-sans'})
+const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-sans" })
 
 const fontMono = Geist_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
 })
 
-export default function RootLayout({
+function initials(name?: string | null, email?: string | null) {
+  const value = name?.trim() || email?.split("@")[0] || "Me"
+  return value
+    .split(/[\s._-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("")
+}
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const session = await auth.api.getSession({ headers: await headers() })
+
   return (
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn("antialiased", fontMono.variable, "font-sans", dmSans.variable)}
+      className={cn(
+        "antialiased",
+        fontMono.variable,
+        "font-sans",
+        dmSans.variable
+      )}
     >
       <body>
         <ThemeProvider>
-          <header className="border-b border-border/50 px-4 py-3 flex items-center gap-4">
-            <Link href="/" className="font-semibold text-sm">
-              Engram
-            </Link>
-            <Link
-              href="/upload"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Upload
-            </Link>
-            <Link
-              href="/search"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Search
-            </Link>
-            <Link
-              href="/settings"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Settings
-            </Link>
-            <div className="ml-auto">
-              <LogoutButton />
-            </div>
-          </header>
-          <main>
-            {children}
-          </main>
+          {session && (
+            <AppHeader
+              initials={initials(session.user.name, session.user.email)}
+            />
+          )}
+          <main>{children}</main>
         </ThemeProvider>
       </body>
     </html>

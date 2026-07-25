@@ -31,6 +31,7 @@ final class RecorderController {
   private var dismissalTask: Task<Void, Never>?
   private var retentionCleanupTask: Task<Void, Never>?
   private var uploadTasks: [UUID: Task<Void, Never>] = [:]
+  private var metadataTasks: [UUID: Task<Void, Never>] = [:]
   private var deletionTasks: [UUID: Task<Void, Never>] = [:]
   private(set) var deletingRecordingIDs: Set<UUID> = []
 
@@ -273,6 +274,7 @@ final class RecorderController {
     guard deletionTasks[recordingID] == nil else { return }
     let uploadTask = uploadTasks.removeValue(forKey: recordingID)
     uploadTask?.cancel()
+    metadataTasks.removeValue(forKey: recordingID)?.cancel()
 
     deletingRecordingIDs.insert(recordingID)
     deletionTasks[recordingID] = Task { [weak self] in
@@ -309,6 +311,9 @@ final class RecorderController {
         task.cancel()
       }
       for task in deletionTasks.values {
+        task.cancel()
+      }
+      for task in metadataTasks.values {
         task.cancel()
       }
       retentionCleanupTask?.cancel()
@@ -405,6 +410,7 @@ final class RecorderController {
       recordings[updatedIndex].lastError = nil
       await persistHistory()
       scheduleRetentionCleanup()
+      startMetadataRefresh(recordingID: recordingID)
     } catch {
       guard let failedIndex = recordings.firstIndex(where: { $0.id == recordingID }) else {
         return
@@ -437,6 +443,11 @@ final class RecorderController {
       }
       if changed { await persistHistory() }
       await deleteExpiredLocalRecordings(now: migrationDate)
+      for recording in recordings
+      where recording.uploadState == .uploaded && recording.remoteID != nil
+      {
+        startMetadataRefresh(recordingID: recording.id, maxAttempts: 1)
+      }
     } catch {
       showFailure("Could not load recording history")
     }
@@ -444,6 +455,53 @@ final class RecorderController {
 
   private func persistHistory() async {
     try? await archive.save(recordings)
+  }
+
+  private func startMetadataRefresh(recordingID: UUID, maxAttempts: Int = 60) {
+    guard metadataTasks[recordingID] == nil else { return }
+    metadataTasks[recordingID] = Task { [weak self] in
+      guard let self else { return }
+      await self.refreshRemoteMetadata(
+        recordingID: recordingID,
+        maxAttempts: maxAttempts
+      )
+      self.metadataTasks[recordingID] = nil
+    }
+  }
+
+  private func refreshRemoteMetadata(
+    recordingID: UUID,
+    maxAttempts: Int
+  ) async {
+    for attempt in 0..<maxAttempts {
+      guard !Task.isCancelled,
+        let index = recordings.firstIndex(where: { $0.id == recordingID }),
+        let remoteID = recordings[index].remoteID,
+        let serverURL = recordings[index].authBinding?.serverURL ?? settings.serverURL,
+        recordings[index].authBinding?.matches(settings.currentBinding) == true
+      else { return }
+
+      do {
+        let metadata = try await api.recordingMetadata(
+          remoteID: remoteID,
+          serverURL: serverURL
+        )
+        if metadata.titleOrigin == "generated", recordings[index].title != metadata.title {
+          recordings[index].title = metadata.title
+          await persistHistory()
+        }
+        if metadata.status == "done" || metadata.status == "error" { return }
+      } catch {
+        if maxAttempts == 1 { return }
+      }
+
+      guard attempt + 1 < maxAttempts else { return }
+      do {
+        try await Task.sleep(for: .seconds(10))
+      } catch {
+        return
+      }
+    }
   }
 
   private func deleteLocalRecording(_ recordingID: UUID) async {

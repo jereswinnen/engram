@@ -1,11 +1,17 @@
-import { and, desc, eq, sql } from "drizzle-orm"
+import { and, desc, eq, gte, ne, or, sql } from "drizzle-orm"
 import { embed, embedMany } from "ai"
 import { createOpenAI } from "@ai-sdk/openai"
 import { db } from "@/db"
-import { transcriptEmbeddings, transcriptions } from "@/db/schema"
+import {
+  aiEnhancements,
+  transcriptEmbeddings,
+  transcriptions,
+} from "@/db/schema"
 import { config } from "@/lib/config"
 import { getOwnedRecording } from "@/lib/recordings/store"
+import { getRecordingSpeakerMap } from "@/lib/speakers/store"
 import { chunkTranscript, type TranscriptSegment } from "./chunks"
+import { SEARCH_EMBEDDING_VERSION } from "./constants"
 
 const INSERT_BATCH_SIZE = 25
 const EMBEDDING_DIMENSIONS = 1_536
@@ -52,9 +58,28 @@ export async function embedLatestTranscript(
     throw new Error(`transcription for ${recordingId} not found`)
   }
 
+  const [enhancement, speakerMap] = await Promise.all([
+    db.query.aiEnhancements.findFirst({
+      where: eq(aiEnhancements.recordingId, recordingId),
+      orderBy: [desc(aiEnhancements.createdAt)],
+    }),
+    getRecordingSpeakerMap(ownerId, recordingId).catch(() => ({})),
+  ])
   const chunks = chunkTranscript(
     transcription.segments as TranscriptSegment[],
-    transcription.fullText
+    transcription.fullText,
+    {
+      speakerMap,
+      context: [
+        `Recording title: ${recording.title}`,
+        enhancement?.title && enhancement.title !== recording.title
+          ? `Suggested title: ${enhancement.title}`
+          : "",
+        enhancement?.overview
+          ? `Recording summary: ${enhancement.overview}`
+          : "",
+      ],
+    }
   )
   if (chunks.length === 0) {
     return {
@@ -70,7 +95,8 @@ export async function embedLatestTranscript(
   const existing = await db.query.transcriptEmbeddings.findMany({
     where: and(
       eq(transcriptEmbeddings.transcriptionId, transcription.id),
-      eq(transcriptEmbeddings.embeddingModel, model)
+      eq(transcriptEmbeddings.embeddingModel, model),
+      eq(transcriptEmbeddings.embeddingVersion, SEARCH_EMBEDDING_VERSION)
     ),
   })
   const existingHashes = new Map(
@@ -110,6 +136,7 @@ export async function embedLatestTranscript(
     startSeconds: chunk.startSeconds,
     endSeconds: chunk.endSeconds,
     embeddingModel: model,
+    embeddingVersion: SEARCH_EMBEDDING_VERSION,
     embedding: generated.embeddings[index],
   }))
 
@@ -129,6 +156,7 @@ export async function embedLatestTranscript(
             recordingId: sql`excluded.recording_id`,
             content: sql`excluded.content`,
             contentHash: sql`excluded.content_hash`,
+            embeddingVersion: sql`excluded.embedding_version`,
             startSeconds: sql`excluded.start_seconds`,
             endSeconds: sql`excluded.end_seconds`,
             embedding: sql`excluded.embedding`,
@@ -136,6 +164,18 @@ export async function embedLatestTranscript(
           },
         })
     }
+    await transaction
+      .delete(transcriptEmbeddings)
+      .where(
+        and(
+        eq(transcriptEmbeddings.transcriptionId, transcription.id),
+        eq(transcriptEmbeddings.embeddingModel, model),
+        or(
+          ne(transcriptEmbeddings.embeddingVersion, SEARCH_EMBEDDING_VERSION),
+          gte(transcriptEmbeddings.chunkIndex, chunks.length)
+        )
+      )
+      )
   })
 
   return {
@@ -177,6 +217,7 @@ export async function listEmbeddingBackfillCandidates(
       FROM transcript_embeddings embedding
       WHERE embedding.transcription_id = latest.transcription_id
         AND embedding.embedding_model = ${model}
+        AND embedding.embedding_version = ${SEARCH_EMBEDDING_VERSION}
     )
     ORDER BY latest.recording_id
     LIMIT ${limit}

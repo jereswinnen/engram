@@ -14,6 +14,7 @@ import {
 } from "@/lib/glossary/apply"
 import { getRecordingSpeakerMap } from "@/lib/speakers/store"
 import { getOwnedRecording, ownedRecordingWhere } from "@/lib/recordings/store"
+import { runTranscriptEmbedding } from "@/lib/search/embeddings"
 
 async function setStatus(
   ownerId: string,
@@ -100,6 +101,7 @@ export async function runEnhancement(
       model: config.llmModel(),
     })
     await setStatus(ownerId, id, "done")
+    await runTranscriptEmbedding(ownerId, id)
   } catch (err) {
     try {
       await setStatus(
@@ -111,5 +113,7 @@ export async function runEnhancement(
     } catch {
       // DB unavailable while recording error status — nothing further we can do
     }
+    // A usable transcript should remain searchable even if summary generation fails.
+    await runTranscriptEmbedding(ownerId, id)
   }
 }

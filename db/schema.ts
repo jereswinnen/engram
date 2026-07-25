@@ -362,7 +362,13 @@ export const transcriptEmbeddings = pgTable(
     startSeconds: doublePrecision("start_seconds"),
     endSeconds: doublePrecision("end_seconds"),
     embeddingModel: text("embedding_model").notNull(),
+    embeddingVersion: text("embedding_version")
+      .notNull()
+      .default("transcript-passage-v1"),
     embedding: vector("embedding", { dimensions: 1536 }).notNull(),
+    searchVector: tsvector("search_vector").generatedAlwaysAs(
+      sql`to_tsvector('simple', coalesce(content, ''))`
+    ),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at")
       .notNull()
@@ -381,6 +387,7 @@ export const transcriptEmbeddings = pgTable(
       "hnsw",
       t.embedding.op("vector_cosine_ops")
     ),
+    index("transcript_embeddings_search_idx").using("gin", t.searchVector),
   ]
 )
 

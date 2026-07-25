@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/evals/*.json
+!/evals/search-cases.example.json
 
 # next.js
 /.next/

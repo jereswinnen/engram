@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { PgDialect } from "drizzle-orm/pg-core"
-import { SNIPPET_START, SNIPPET_END } from "./snippet"
+import { SNIPPET_END, SNIPPET_START } from "./snippet"
 
 const execute = vi.fn()
 vi.mock("@/db", () => ({ db: { execute: (...a: unknown[]) => execute(...a) } }))
@@ -15,97 +15,98 @@ beforeEach(() => {
 })
 
 describe("searchRecordings", () => {
-  it("returns [] for a blank query without hitting the db", async () => {
+  it("returns an empty page for a blank query without hitting the db", async () => {
     const { searchRecordings } = await import("./search")
-    expect(await searchRecordings("user-a", "   ")).toEqual([])
+    expect(await searchRecordings("user-a", "   ")).toEqual({
+      results: [],
+      pagination: { limit: 20, offset: 0, hasMore: false },
+    })
     expect(execute).not.toHaveBeenCalled()
     expect(embedSearchQuery).not.toHaveBeenCalled()
   })
-  it("maps rows and renders snippets", async () => {
+
+  it("maps passage rows, renders snippets, and reports pagination", async () => {
     execute.mockResolvedValueOnce([
       {
-        id: "r1",
+        passage_id: "p1",
+        recording_id: "r1",
         title: "Sync",
         created_at: "2026-06-01T10:00:00Z",
         snippet: `the ${SNIPPET_START}budget${SNIPPET_END} talk`,
-        score: 0.5,
+        start_seconds: 12,
+        end_seconds: 42,
+        match_type: "hybrid",
+        score: 0.03,
+        similarity: 0.8,
+      },
+      {
+        passage_id: "p2",
+        recording_id: "r2",
+        title: "Second",
+        created_at: "2026-06-02T10:00:00Z",
+        snippet: "another",
+        start_seconds: null,
+        end_seconds: null,
+        match_type: "semantic",
+        score: 0.02,
+        similarity: 0.7,
       },
     ])
-    execute.mockResolvedValueOnce([])
     const { searchRecordings } = await import("./search")
-    const hits = await searchRecordings("user-a", "budget")
-    expect(execute).toHaveBeenCalledTimes(2)
-    expect(hits).toHaveLength(1)
-    expect(hits[0]).toMatchObject({
-      id: "r1",
-      title: "Sync",
+    const page = await searchRecordings("user-a", "budget", { limit: 1 })
+
+    expect(execute).toHaveBeenCalledOnce()
+    expect(page.pagination).toEqual({ limit: 1, offset: 0, hasMore: true })
+    expect(page.results[0]).toMatchObject({
+      passageId: "p1",
+      recordingId: "r1",
       snippet: "the <mark>budget</mark> talk",
-      matchType: "keyword",
+      matchType: "hybrid",
+      startSeconds: 12,
+      endSeconds: 42,
     })
-    expect(hits[0].createdAt).toBeInstanceOf(Date)
+    expect(page.results[0].createdAt).toBeInstanceOf(Date)
   })
 
-  it("groups transcript/title matches underneath the owner predicate", async () => {
-    execute.mockResolvedValueOnce([]).mockResolvedValueOnce([])
+  it("uses owner-scoped, versioned passage candidates and reciprocal-rank fusion", async () => {
+    execute.mockResolvedValueOnce([])
     const { searchRecordings } = await import("./search")
 
     await searchRecordings("user-b", "private phrase")
 
     const statement = execute.mock.calls[0][0]
     const rendered = new PgDialect().sqlToQuery(statement).sql
-    expect(rendered).toMatch(
-      /WHERE \(r\.owner_id = \$\d+ OR \(\$\d+ AND r\.owner_id IS NULL\)\)\s+AND \(\s+t\.search_vector/
-    )
-  })
-
-  it("adds owner-scoped semantic matches from the current embedding model", async () => {
-    execute.mockResolvedValueOnce([]).mockResolvedValueOnce([
-      {
-        id: "r2",
-        title: "Planning",
-        created_at: "2026-06-02T10:00:00Z",
-        snippet: "We discussed how to launch the mobile application.",
-        start_seconds: 42,
-        score: 0.81,
-      },
-    ])
-    const { searchRecordings } = await import("./search")
-
-    const hits = await searchRecordings("user-c", "iPhone roadmap")
-
-    expect(embedSearchQuery).toHaveBeenCalledWith("iPhone roadmap")
-    expect(hits).toEqual([
-      expect.objectContaining({
-        id: "r2",
-        matchType: "semantic",
-        startSeconds: 42,
-        score: 0.81,
-      }),
-    ])
-    const semanticStatement = execute.mock.calls[1][0]
-    const rendered = new PgDialect().sqlToQuery(semanticStatement).sql
     expect(rendered).toMatch(/WHERE embedding\.owner_id = \$\d+/)
-    expect(rendered).toContain("embedding.embedding_model")
+    expect(rendered).toContain("embedding.embedding_version")
+    expect(rendered).toContain("UNION ALL")
+    expect(rendered).toContain("sum(score)")
   })
 
-  it("keeps keyword search available when OpenAI embedding fails", async () => {
+  it("keeps keyword passage search available when OpenAI embedding fails", async () => {
     embedSearchQuery.mockRejectedValueOnce(new Error("provider unavailable"))
     execute.mockResolvedValueOnce([
       {
-        id: "r1",
+        passage_id: "p1",
+        recording_id: "r1",
         title: "Sync",
         created_at: "2026-06-01T10:00:00Z",
         snippet: "budget talk",
-        score: 0.4,
+        start_seconds: 5,
+        end_seconds: 15,
+        match_type: "keyword",
+        score: 0.01,
+        similarity: null,
       },
     ])
     const error = vi.spyOn(console, "error").mockImplementation(() => {})
     const { searchRecordings } = await import("./search")
 
-    const hits = await searchRecordings("user-a", "budget")
+    const page = await searchRecordings("user-a", "budget")
 
-    expect(hits).toHaveLength(1)
-    expect(hits[0].matchType).toBe("keyword")
+    expect(page.results).toHaveLength(1)
+    expect(page.results[0].matchType).toBe("keyword")
+    const rendered = new PgDialect().sqlToQuery(execute.mock.calls[0][0]).sql
+    expect(rendered).toContain("websearch_to_tsquery")
     error.mockRestore()
   })
 })

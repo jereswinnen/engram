@@ -6,7 +6,6 @@ struct MenuBarView: View {
 
   @Bindable var controller: RecorderController
   @Environment(\.dismiss) private var dismiss
-  @Environment(\.openSettings) private var openSettings
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -37,9 +36,7 @@ struct MenuBarView: View {
       Divider()
 
       HStack {
-        Button {
-          openSettings()
-        } label: {
+        SettingsLink {
           Label("Settings", systemImage: "gearshape")
         }
         .buttonStyle(.plain)

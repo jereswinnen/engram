@@ -457,7 +457,8 @@ private enum BrowserProcessResolver {
     var buffer = [CChar](repeating: 0, count: 4_096)
     let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))
     guard length > 0 else { return nil }
-    return String(cString: buffer)
+    let bytes = buffer.prefix(Int(length)).prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
+    return String(decoding: bytes, as: UTF8.self)
   }
 
   private static func parentPID(of pid: pid_t) -> pid_t? {

@@ -21,6 +21,7 @@ struct EngramRecorderApp: App {
       SettingsView(settings: runtime.controller.settings)
     }
     .defaultSize(width: 520, height: 360)
+    .windowResizability(.contentSize)
   }
 
   private var menuBarTitle: String {

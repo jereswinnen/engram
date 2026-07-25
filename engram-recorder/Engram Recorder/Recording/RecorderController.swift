@@ -233,7 +233,7 @@ final class RecorderController {
       alert.alertStyle = .informational
       alert.addButton(withTitle: "Attach & Upload")
       alert.addButton(withTitle: "Cancel")
-      NSApp.activate(ignoringOtherApps: true)
+      NSApp.activate()
       guard alert.runModal() == .alertFirstButtonReturn else { return }
       recordings[index].authBinding = currentBinding
       Task { [weak self] in

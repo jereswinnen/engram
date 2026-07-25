@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import ServiceManagement
 
 @MainActor
 @Observable
@@ -7,7 +8,6 @@ final class AppSettings {
   private enum Keys {
     static let serverURL = "engram.serverURL"
     static let hideFromCapture = "engram.hideCapsuleFromCapture"
-    static let launchAtLogin = "engram.launchAtLogin"
     static let meetingDetectionMode = "engram.meetingDetectionMode"
   }
 
@@ -35,6 +35,8 @@ final class AppSettings {
   private(set) var authenticationError: String?
   private(set) var isAuthenticating = false
   private(set) var revocationFailed = false
+  private(set) var launchAtLoginStatus: SMAppService.Status
+  private(set) var launchAtLoginError: String?
   let authSession: EngramAuthSession
   private let defaults: UserDefaults
 
@@ -49,6 +51,8 @@ final class AppSettings {
     authenticationError = nil
     isAuthenticating = false
     revocationFailed = false
+    launchAtLoginStatus = SMAppService.mainApp.status
+    launchAtLoginError = nil
     hideCapsuleFromCapture = defaults.object(forKey: Keys.hideFromCapture) as? Bool ?? true
     meetingDetectionMode =
       MeetingDetectionMode(
@@ -81,6 +85,39 @@ final class AppSettings {
   var isConfigured: Bool {
     guard let serverURL, serverURL.isAllowedEngramServer, let authAccount else { return false }
     return authAccount.issuer == serverURL.engramBaseURL.appendingPathComponent("api/auth")
+  }
+
+  var launchAtLogin: Bool {
+    launchAtLoginStatus == .enabled || launchAtLoginStatus == .requiresApproval
+  }
+
+  var launchAtLoginRequiresApproval: Bool {
+    launchAtLoginStatus == .requiresApproval
+  }
+
+  func setLaunchAtLogin(_ enabled: Bool) {
+    let service = SMAppService.mainApp
+    launchAtLoginError = nil
+    do {
+      if enabled {
+        if service.status == .notRegistered || service.status == .notFound {
+          try service.register()
+        }
+      } else if service.status != .notRegistered {
+        try service.unregister()
+      }
+    } catch {
+      launchAtLoginError = error.localizedDescription
+    }
+    refreshLaunchAtLoginStatus()
+  }
+
+  func refreshLaunchAtLoginStatus() {
+    launchAtLoginStatus = SMAppService.mainApp.status
+  }
+
+  func openLoginItemsSettings() {
+    SMAppService.openSystemSettingsLoginItems()
   }
 
   func signIn() async {

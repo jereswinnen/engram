@@ -239,7 +239,7 @@ private struct RecordingRow: View {
     alert.addButton(withTitle: deleteTitle).hasDestructiveAction = true
     alert.addButton(withTitle: "Cancel")
 
-    NSApp.activate(ignoringOtherApps: true)
+    NSApp.activate()
     guard alert.runModal() == .alertFirstButtonReturn else { return }
     controller.deleteRecording(recording.id)
   }
@@ -254,7 +254,7 @@ private struct RecordingRow: View {
     alert.addButton(withTitle: "Delete Everywhere").hasDestructiveAction = true
     alert.addButton(withTitle: "Cancel")
 
-    NSApp.activate(ignoringOtherApps: true)
+    NSApp.activate()
     guard alert.runModal() == .alertFirstButtonReturn else { return }
     controller.deleteRecording(recording.id, fromEngram: true)
   }

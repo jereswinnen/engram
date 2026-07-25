@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SettingsView: View {
   @Bindable var settings: AppSettings
+  @Environment(\.appearsActive) private var appearsActive
 
   var body: some View {
     Form {
@@ -52,8 +53,8 @@ struct SettingsView: View {
         }
 
         Text(
-          "Sign-in opens your browser. The renewable credential is stored in the device-only "
-            + "macOS Keychain. Confirmed uploads remain local for 7 days."
+          "Sign-in opens your browser. The renewable credential is stored in the encrypted, "
+            + "non-synchronizing macOS login Keychain. Confirmed uploads remain local for 7 days."
         )
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -84,6 +85,35 @@ struct SettingsView: View {
         }
       }
 
+      Section("App") {
+        Toggle(
+          "Launch Engram at login",
+          isOn: Binding(
+            get: { settings.launchAtLogin },
+            set: { settings.setLaunchAtLogin($0) }
+          )
+        )
+
+        if settings.launchAtLoginRequiresApproval {
+          Label(
+            "Allow Engram under System Settings → General → Login Items.",
+            systemImage: "exclamationmark.triangle.fill"
+          )
+          .font(.caption)
+          .foregroundStyle(.orange)
+
+          Button("Open Login Items Settings") {
+            settings.openLoginItemsSettings()
+          }
+        }
+
+        if let error = settings.launchAtLoginError {
+          Label(error, systemImage: "exclamationmark.triangle.fill")
+            .font(.caption)
+            .foregroundStyle(.red)
+        }
+      }
+
       Section {
         Text(
           "Google Meet detection uses the same low-overhead macOS WebRTC and browser-audio signals as Plaud."
@@ -94,6 +124,14 @@ struct SettingsView: View {
     }
     .formStyle(.grouped)
     .padding(12)
+    .onAppear {
+      settings.refreshLaunchAtLoginStatus()
+    }
+    .onChange(of: appearsActive) { _, isActive in
+      if isActive {
+        settings.refreshLaunchAtLoginStatus()
+      }
+    }
   }
 
   private func openPrivacyPane(_ anchor: String) {

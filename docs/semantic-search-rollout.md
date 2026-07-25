@@ -52,8 +52,8 @@ only a recording-level match.
 - [x] Group up to three timestamped passages beneath each recording in web search.
 - [x] Refresh derived embeddings after enhancement or speaker-name changes.
 - [x] Add a local evaluation harness for recall@3, recall@5, and reciprocal rank.
-- [ ] Apply the additive v2 migration in production.
-- [ ] Rebuild all non-empty transcript embeddings and verify coverage.
+- [x] Apply the additive v2 migration in production.
+- [x] Rebuild all non-empty transcript embeddings and verify coverage.
 - [ ] Run the first private search evaluation and record aggregate results.
 
 The migration keeps v1 rows readable throughout the rebuild. Each recording is
@@ -95,3 +95,17 @@ pnpm search:evaluate -- --dataset /path/to/private-search-cases.json --owner-id 
 
 The report prints aggregate metrics and failed case IDs only. It does not print or
 persist query text, transcript text, or search snippets.
+
+## Phase 5 production verification — 2026-07-25
+
+- Railway deployment `270a77a2-fab8-43b7-9753-6cebdc68b18a`: `SUCCESS`.
+- 38 latest transcripts; 37 non-empty and searchable; zero missing v2 embeddings.
+- 837 v2 passages across 37 recordings; zero v1 rows remain.
+- Zero incorrect vector dimensions, missing generated search vectors, or owner
+  mismatches.
+- A generic semantic smoke query returned 10 timestamped passages across five
+  recordings through the production search implementation.
+
+The first qualitative evaluation remains intentionally unchecked. Its questions
+should either be written from the user's own memory or be generated from private
+recording summaries only after explicit approval for that additional OpenAI use.

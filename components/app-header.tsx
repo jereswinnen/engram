@@ -8,7 +8,6 @@ import {
   RiLogoutBoxRLine,
   RiSearchLine,
   RiSettings3Line,
-  RiUploadCloud2Line,
 } from "@remixicon/react"
 import { authClient } from "@/lib/auth-client"
 import { cn } from "@/lib/utils"
@@ -86,13 +85,6 @@ export function AppHeader({ initials }: { initials: string }) {
               </Link>
             )
           })}
-          <Link
-            href="/upload"
-            className="ml-1.5 flex h-8 items-center gap-1.5 rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/85"
-          >
-            <RiUploadCloud2Line className="size-4" />
-            <span className="hidden sm:inline">Upload</span>
-          </Link>
           <div className="ml-1.5 flex items-center gap-0.5">
             <span className="grid size-8 place-items-center rounded-full bg-muted text-xs font-medium">
               {initials}

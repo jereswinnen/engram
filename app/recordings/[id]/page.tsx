@@ -85,22 +85,9 @@ export default async function RecordingPage({
       <header className="border-b pb-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <div className="flex items-start gap-2">
-              <h1 className="text-xl font-semibold tracking-[-0.025em] sm:text-2xl">
-                {recording.title}
-              </h1>
-              {recording.titleOrigin === "generated" && (
-                <span className="mt-1 inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/8 px-2 py-0.5 text-[11px] font-medium text-primary">
-                  <RiSparkling2Line className="size-3" /> AI title
-                </span>
-              )}
-            </div>
-            {recording.titleOrigin === "generated" &&
-              recording.originalTitle && (
-                <p className="mt-1 truncate text-xs text-muted-foreground">
-                  Original: {recording.originalTitle}
-                </p>
-              )}
+            <h1 className="text-xl font-semibold tracking-[-0.025em] sm:text-2xl">
+              {recording.title}
+            </h1>
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
                 <RiCalendarLine className="size-3.5" />

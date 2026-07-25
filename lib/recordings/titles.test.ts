@@ -36,7 +36,24 @@ describe("generatedTitleUpdate", () => {
     })
   })
 
-  it.each(["user", "provider", "legacy"])(
+  it("replaces provider titles while preserving the supplied title", () => {
+    expect(
+      generatedTitleUpdate(
+        {
+          title: "2026-07-25 10:42",
+          originalTitle: "2026-07-25 10:42",
+          titleOrigin: "provider",
+        },
+        "Product launch decisions and ownership"
+      )
+    ).toEqual({
+      title: "Product launch decisions and ownership",
+      originalTitle: "2026-07-25 10:42",
+      titleOrigin: "generated",
+    })
+  })
+
+  it.each(["user", "legacy"])(
     "does not replace a %s title",
     (titleOrigin) => {
       expect(

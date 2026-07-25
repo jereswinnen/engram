@@ -12,6 +12,8 @@ import {
   foreignKey,
   check,
   uniqueIndex,
+  doublePrecision,
+  vector,
 } from "drizzle-orm/pg-core"
 import { relations, sql } from "drizzle-orm"
 
@@ -341,6 +343,47 @@ export const transcriptions = pgTable(
   (t) => [index("idx_transcriptions_search").using("gin", t.searchVector)]
 )
 
+export const transcriptEmbeddings = pgTable(
+  "transcript_embeddings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    recordingId: uuid("recording_id")
+      .notNull()
+      .references(() => recordings.id, { onDelete: "cascade" }),
+    transcriptionId: uuid("transcription_id")
+      .notNull()
+      .references(() => transcriptions.id, { onDelete: "cascade" }),
+    chunkIndex: integer("chunk_index").notNull(),
+    content: text("content").notNull(),
+    contentHash: text("content_hash").notNull(),
+    startSeconds: doublePrecision("start_seconds"),
+    endSeconds: doublePrecision("end_seconds"),
+    embeddingModel: text("embedding_model").notNull(),
+    embedding: vector("embedding", { dimensions: 1536 }).notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    index("transcript_embeddings_owner_idx").on(t.ownerId),
+    index("transcript_embeddings_recording_idx").on(t.recordingId),
+    uniqueIndex("transcript_embeddings_transcription_chunk_model_unique").on(
+      t.transcriptionId,
+      t.chunkIndex,
+      t.embeddingModel
+    ),
+    index("transcript_embeddings_embedding_hnsw_idx").using(
+      "hnsw",
+      t.embedding.op("vector_cosine_ops")
+    ),
+  ]
+)
+
 export const aiEnhancements = pgTable("ai_enhancements", {
   id: uuid("id").primaryKey().defaultRandom(),
   recordingId: uuid("recording_id")
@@ -635,6 +678,25 @@ export const recordingRelations = relations(recordings, ({ one, many }) => ({
     references: [authConnections.id],
   }),
   transcriptions: many(transcriptions),
+  transcriptEmbeddings: many(transcriptEmbeddings),
   aiEnhancements: many(aiEnhancements),
   recordingSpeakers: many(recordingSpeakers),
 }))
+
+export const transcriptEmbeddingRelations = relations(
+  transcriptEmbeddings,
+  ({ one }) => ({
+    owner: one(user, {
+      fields: [transcriptEmbeddings.ownerId],
+      references: [user.id],
+    }),
+    recording: one(recordings, {
+      fields: [transcriptEmbeddings.recordingId],
+      references: [recordings.id],
+    }),
+    transcription: one(transcriptions, {
+      fields: [transcriptEmbeddings.transcriptionId],
+      references: [transcriptions.id],
+    }),
+  })
+)

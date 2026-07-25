@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { runTranscription, runEnhancement } from "@/lib/pipeline"
 import { isAuthFailure, requirePrincipal } from "@/lib/auth/policy"
 import { getOwnedRecording } from "@/lib/recordings/store"
+import { runTranscriptEmbedding } from "@/lib/search/embeddings"
 
 export async function POST(
   req: NextRequest,
@@ -22,7 +23,10 @@ export async function POST(
   await runTranscription(principal.userId, id)
   const rec = await getOwnedRecording(principal.userId, id)
   if (rec?.status === "transcribed") {
-    await runEnhancement(principal.userId, id)
+    await Promise.all([
+      runEnhancement(principal.userId, id),
+      runTranscriptEmbedding(principal.userId, id),
+    ])
   }
   return NextResponse.json({ ok: true })
 }

@@ -26,7 +26,7 @@ This rollout keeps the existing authentication and recording pipeline intact whi
 - [x] Restyle search results as grouped, compact recording matches.
 - [x] Build the responsive side-by-side recording detail layout.
 - [x] Add compact playback controls and transcript filtering.
-- [ ] Run browser-based design QA against option 2 and fix P0–P2 drift.
+- [x] Run browser-based design QA against option 2 and fix P0–P2 drift.
 
 ## Phase 3 — Reversible generated titles
 
@@ -49,11 +49,11 @@ This rollout keeps the existing authentication and recording pipeline intact whi
 
 ## Phase 5 — Release
 
-- [ ] Review the final diff for unrelated or destructive changes.
-- [ ] Commit with conventional commit messages.
-- [ ] Push the feature branch and open a pull request.
-- [ ] Merge after checks pass.
-- [ ] Verify Railway migration and deployment.
+- [x] Review the final diff for unrelated or destructive changes.
+- [x] Commit with conventional commit messages.
+- [x] Push the feature branch and open a pull request.
+- [x] Merge after checks pass.
+- [x] Verify Railway migration and deployment.
 - [ ] Smoke-test one new Mac recording end to end before removing any compatibility code.
 
 ## Phase 6 — Production refinements
@@ -63,8 +63,8 @@ This rollout keeps the existing authentication and recording pipeline intact whi
 - [x] Remove generated-title badges and sparkle provenance from the interface.
 - [x] Remove manual upload from navigation and redirect the retired page.
 - [x] Group multiple active OAuth grants into one connected-app entry.
-- [ ] Run web, API, migration, and browser verification.
-- [ ] Merge and verify the Railway deployment.
+- [x] Run web, API, migration, and browser verification.
+- [x] Merge and verify the Railway deployment.
 
 ## Rollback
 

@@ -11,22 +11,49 @@ struct SettingsView: View {
           "Server URL", text: $settings.serverURLString, prompt: Text("https://engram.example.com")
         )
         .textContentType(.URL)
-        SecureField("Mac recorder API token", text: $settings.apiToken)
 
         if !settings.serverURLString.isEmpty, settings.serverURL == nil {
           Label("Enter a valid HTTP or HTTPS URL.", systemImage: "exclamationmark.triangle.fill")
             .foregroundStyle(.orange)
             .font(.caption)
         }
-        if let error = settings.tokenSaveError {
+        if let account = settings.authAccount, settings.isConfigured {
+          LabeledContent("Signed in", value: account.displayName)
+          LabeledContent("Issuer", value: account.issuer.absoluteString)
+            .textSelection(.enabled)
+          Button("Disconnect", role: .destructive) {
+            Task { await settings.disconnect() }
+          }
+          .disabled(settings.isAuthenticating)
+        } else {
+          Button("Sign in to Engram") {
+            Task { await settings.signIn() }
+          }
+          .buttonStyle(.borderedProminent)
+          .disabled(settings.serverURL == nil || settings.isAuthenticating)
+        }
+
+        if settings.isAuthenticating {
+          ProgressView()
+            .controlSize(.small)
+        }
+
+        if let error = settings.authenticationError {
           Label(error, systemImage: "key.slash")
             .foregroundStyle(.red)
             .font(.caption)
         }
 
+        if settings.revocationFailed {
+          Button("Sign out only on this Mac") {
+            Task { await settings.signOutLocallyAfterRevocationFailure() }
+          }
+          .foregroundStyle(.red)
+        }
+
         Text(
-          "The token is stored in your macOS Keychain. After Engram confirms an upload, "
-            + "its local recording is kept for 7 days, then removed automatically."
+          "Sign-in opens your browser. The renewable credential is stored in the device-only "
+            + "macOS Keychain. Confirmed uploads remain local for 7 days."
         )
         .font(.caption)
         .foregroundStyle(.secondary)

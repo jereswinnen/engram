@@ -1,6 +1,7 @@
 {
   "name": "engram",
   "version": "0.0.1",
+  "packageManager": "pnpm@11.7.0",
   "type": "module",
   "private": true,
   "scripts": {
@@ -13,18 +14,21 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "auth:provision-clients": "pnpm dlx tsx@4.20.6 scripts/register-oauth-clients.ts",
+    "auth:cleanup-clients": "pnpm dlx tsx@4.20.6 scripts/cleanup-abandoned-oauth-clients.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.73",
     "@aws-sdk/client-s3": "^3.1075.0",
     "@aws-sdk/lib-storage": "^3.1075.0",
     "@aws-sdk/s3-request-presigner": "^3.1073.0",
+    "@better-auth/oauth-provider": "1.6.20",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@remixicon/react": "^4.9.0",
     "ai": "^6.0.208",
     "archiver": "^8.0.0",
-    "better-auth": "^1.6.20",
+    "better-auth": "1.6.20",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
@@ -41,7 +45,7 @@
     "zod": "^4.4.3"
   },
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=22.13.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -49,6 +53,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "auth": "1.6.20",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",

@@ -1,78 +1,119 @@
-import { Readable, Transform } from "node:stream";
-import { ZipArchive } from "archiver";
-import { eq, desc } from "drizzle-orm";
-import { db } from "@/db";
-import { recordings, transcriptions, aiEnhancements } from "@/db/schema";
-import { getStorage } from "@/lib/storage";
-import { recordingToMarkdown } from "@/lib/export/markdown";
-import { recordingToExport } from "@/lib/export/json";
-import { exportFilename } from "@/lib/export/filename";
-import { getRecordingSpeakerMap } from "@/lib/speakers/store";
-import { markReady, markError } from "./store";
+import { Readable, Transform } from "node:stream"
+import { ZipArchive } from "archiver"
+import { eq, desc } from "drizzle-orm"
+import { db } from "@/db"
+import { recordings, transcriptions, aiEnhancements } from "@/db/schema"
+import { getStorage } from "@/lib/storage"
+import { recordingToMarkdown } from "@/lib/export/markdown"
+import { recordingToExport } from "@/lib/export/json"
+import { exportFilename } from "@/lib/export/filename"
+import { getRecordingSpeakerMap } from "@/lib/speakers/store"
+import { markReady, markError } from "./store"
+import { ownerPredicate } from "@/lib/auth/ownership"
 
-export async function buildBackup(id: string): Promise<void> {
+export async function buildBackup(ownerId: string, id: string): Promise<void> {
   try {
-    const recs = await db.query.recordings.findMany();
-    const storage = getStorage();
+    const recs = await db.query.recordings.findMany({
+      where: ownerPredicate(recordings.ownerId, ownerId),
+    })
+    const storage = getStorage()
 
-    const archive = new ZipArchive({ zlib: { level: 9 } });
+    const archive = new ZipArchive({ zlib: { level: 9 } })
     archive.on("error", (err) => {
-      void markError(id, err instanceof Error ? err.message : String(err));
-    });
-    let size = 0;
+      void markError(
+        ownerId,
+        id,
+        err instanceof Error ? err.message : String(err)
+      )
+    })
+    let size = 0
     // Counting Transform is the SOLE consumer of the archive stream — no data listener,
     // so the stream stays in paused mode and putStream's for-await sees every byte.
     const counter = new Transform({
       transform(chunk, _enc, cb) {
-        size += chunk.length;
-        cb(null, chunk);
+        size += chunk.length
+        cb(null, chunk)
       },
-    });
-    archive.pipe(counter);
+    })
+    archive.pipe(counter)
 
-    const key = `backups/${id}.zip`;
-    const upload = storage.putStream(key, counter, "application/zip");
+    const key = `backups/${id}.zip`
+    const upload = storage.putStream(key, counter, "application/zip")
     // If the upload fails, destroy the archive so nothing is left un-drained (prevents a hang).
-    upload.catch((err) => archive.destroy(err instanceof Error ? err : new Error(String(err))));
+    upload.catch((err) =>
+      archive.destroy(err instanceof Error ? err : new Error(String(err)))
+    )
 
-    const manifest = { createdAt: new Date().toISOString(), recordings: [] as any[], errors: [] as any[] };
+    const manifest = {
+      createdAt: new Date().toISOString(),
+      recordings: [] as any[],
+      errors: [] as any[],
+    }
 
     for (const rec of recs) {
       const [tr, enh, speakerMap] = await Promise.all([
-        db.query.transcriptions.findFirst({ where: eq(transcriptions.recordingId, rec.id), orderBy: [desc(transcriptions.createdAt)] }),
-        db.query.aiEnhancements.findFirst({ where: eq(aiEnhancements.recordingId, rec.id), orderBy: [desc(aiEnhancements.createdAt)] }),
-        getRecordingSpeakerMap(rec.id).catch(() => ({} as Record<string, string>)),
-      ]);
-      const folder = `recordings/${rec.id}`;
-      archive.append(recordingToMarkdown(rec, tr ?? null, enh ?? null, speakerMap), { name: `${folder}/transcript.md` });
-      archive.append(JSON.stringify(recordingToExport(rec, tr ?? null, enh ?? null, speakerMap), null, 2), { name: `${folder}/data.json` });
+        db.query.transcriptions.findFirst({
+          where: eq(transcriptions.recordingId, rec.id),
+          orderBy: [desc(transcriptions.createdAt)],
+        }),
+        db.query.aiEnhancements.findFirst({
+          where: eq(aiEnhancements.recordingId, rec.id),
+          orderBy: [desc(aiEnhancements.createdAt)],
+        }),
+        getRecordingSpeakerMap(ownerId, rec.id).catch(
+          () => ({}) as Record<string, string>
+        ),
+      ])
+      const folder = `recordings/${rec.id}`
+      archive.append(
+        recordingToMarkdown(rec, tr ?? null, enh ?? null, speakerMap),
+        { name: `${folder}/transcript.md` }
+      )
+      archive.append(
+        JSON.stringify(
+          recordingToExport(rec, tr ?? null, enh ?? null, speakerMap),
+          null,
+          2
+        ),
+        { name: `${folder}/data.json` }
+      )
       try {
-        const url = await storage.presignedGetUrl(rec.storageKey, 3600);
-        const res = await fetch(url);
-        if (!res.ok || !res.body) throw new Error(`audio ${res.status}`);
-        archive.append(Readable.fromWeb(res.body as any), { name: `${folder}/${exportFilename(rec.title, rec.id, audioExt(rec.contentType))}` });
-        manifest.recordings.push({ id: rec.id, title: rec.title, audio: true });
+        const url = await storage.presignedGetUrl(rec.storageKey, 3600)
+        const res = await fetch(url)
+        if (!res.ok || !res.body) throw new Error(`audio ${res.status}`)
+        archive.append(Readable.fromWeb(res.body as any), {
+          name: `${folder}/${exportFilename(rec.title, rec.id, audioExt(rec.contentType))}`,
+        })
+        manifest.recordings.push({ id: rec.id, title: rec.title, audio: true })
       } catch (e) {
-        manifest.errors.push({ recordingId: rec.id, error: e instanceof Error ? e.message : String(e) });
-        manifest.recordings.push({ id: rec.id, title: rec.title, audio: false });
+        manifest.errors.push({
+          recordingId: rec.id,
+          error: e instanceof Error ? e.message : String(e),
+        })
+        manifest.recordings.push({ id: rec.id, title: rec.title, audio: false })
       }
     }
 
-    archive.append(JSON.stringify(manifest, null, 2), { name: "manifest.json" });
+    archive.append(JSON.stringify(manifest, null, 2), { name: "manifest.json" })
     // Do NOT await finalize() before upload — with the Transform consumed solely by the
     // upload, awaiting finalize first could deadlock on backpressure.
-    archive.finalize().catch(() => {}); // errors already surfaced via the "error" event + upload rejection
-    await upload;
-    await markReady(id, key, size);
+    archive.finalize().catch(() => {}) // errors already surfaced via the "error" event + upload rejection
+    await upload
+    await markReady(ownerId, id, key, size)
   } catch (e) {
-    await markError(id, e instanceof Error ? e.message : String(e));
+    await markError(ownerId, id, e instanceof Error ? e.message : String(e))
   }
 }
 
 function audioExt(contentType: string | null | undefined): string {
-  if (!contentType) return "mp3";
-  if (contentType.includes("mp4") || contentType.includes("m4a") || contentType.includes("aac")) return "m4a";
-  if (contentType.includes("wav")) return "wav";
-  if (contentType.includes("ogg") || contentType.includes("opus")) return "ogg";
-  return "mp3";
+  if (!contentType) return "mp3"
+  if (
+    contentType.includes("mp4") ||
+    contentType.includes("m4a") ||
+    contentType.includes("aac")
+  )
+    return "m4a"
+  if (contentType.includes("wav")) return "wav"
+  if (contentType.includes("ogg") || contentType.includes("opus")) return "ogg"
+  return "mp3"
 }

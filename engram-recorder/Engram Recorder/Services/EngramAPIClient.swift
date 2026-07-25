@@ -1,20 +1,32 @@
 import Foundation
 
+#if SWIFT_PACKAGE
+  import EngramArchiveCore
+#endif
+
 actor EngramAPIClient {
   private let session: URLSession
+  private let authSession: any EngramAccessTokenProviding
 
-  init() {
+  init(
+    authSession: any EngramAccessTokenProviding,
+    session: URLSession? = nil
+  ) {
+    self.authSession = authSession
+    if let session {
+      self.session = session
+      return
+    }
     let configuration = URLSessionConfiguration.ephemeral
     configuration.waitsForConnectivity = true
     configuration.timeoutIntervalForRequest = 120
     configuration.timeoutIntervalForResource = 30 * 60
-    session = URLSession(configuration: configuration)
+    self.session = URLSession(configuration: configuration)
   }
 
   func upload(
     recording: LocalRecording,
-    serverURL: URL,
-    token: String
+    serverURL: URL
   ) async throws -> UploadResult {
     let fileValues = try recording.audioURL.resourceValues(forKeys: [.fileSizeKey])
     guard let byteCount = fileValues.fileSize, byteCount > 0 else {
@@ -34,7 +46,7 @@ actor EngramAPIClient {
     let initiateData = try await sendJSON(
       initiateBody,
       to: initiateEndpoint,
-      token: token
+      serverURL: serverURL
     )
     let initiation = try JSONDecoder().decode(InitiateUploadResponse.self, from: initiateData)
 
@@ -66,15 +78,14 @@ actor EngramAPIClient {
     let completeData = try await sendJSON(
       CompleteUploadBody(byteCount: byteCount),
       to: completeEndpoint,
-      token: token
+      serverURL: serverURL
     )
     return try JSONDecoder().decode(UploadResult.self, from: completeData)
   }
 
   func deleteRecording(
     remoteID: String,
-    serverURL: URL,
-    token: String
+    serverURL: URL
   ) async throws {
     let endpoint =
       recordingsEndpoint(serverURL: serverURL)
@@ -82,9 +93,7 @@ actor EngramAPIClient {
 
     var request = URLRequest(url: endpoint)
     request.httpMethod = "DELETE"
-    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
-    let (data, response) = try await session.data(for: request)
+    let (data, response) = try await authenticatedData(for: request, serverURL: serverURL)
     guard let http = response as? HTTPURLResponse else {
       throw APIError.invalidResponse
     }
@@ -105,17 +114,35 @@ actor EngramAPIClient {
   private func sendJSON<Body: Encodable>(
     _ body: Body,
     to endpoint: URL,
-    token: String
+    serverURL: URL
   ) async throws -> Data {
     var request = URLRequest(url: endpoint)
     request.httpMethod = "POST"
-    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.httpBody = try JSONEncoder().encode(body)
 
-    let (data, response) = try await session.data(for: request)
+    let (data, response) = try await authenticatedData(for: request, serverURL: serverURL)
     try validate(response: response, data: data, service: "Engram")
     return data
+  }
+
+  private func authenticatedData(
+    for request: URLRequest,
+    serverURL: URL
+  ) async throws -> (Data, URLResponse) {
+    for attempt in 0...1 {
+      var authenticated = request
+      let token = try await authSession.accessToken(
+        for: serverURL,
+        forceRefresh: attempt == 1
+      )
+      authenticated.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+      let result = try await session.data(for: authenticated)
+      guard let http = result.1 as? HTTPURLResponse else { throw APIError.invalidResponse }
+      if http.statusCode == 401, attempt == 0 { continue }
+      return result
+    }
+    throw APIError.invalidResponse
   }
 
   private func validate(
@@ -179,7 +206,7 @@ private enum APIError: LocalizedError {
 }
 
 extension ISO8601DateFormatter {
-  fileprivate static let engram: ISO8601DateFormatter = {
+  nonisolated(unsafe) fileprivate static let engram: ISO8601DateFormatter = {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     return formatter

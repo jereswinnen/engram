@@ -16,7 +16,10 @@ export function proxy(request: NextRequest) {
   // requests would preserve POST and send it to /login instead of the route handler.
   if (
     pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/.well-known/") ||
     pathname === "/login" ||
+    pathname === "/oauth/consent" ||
+    pathname.startsWith("/mcp") ||
     pathname === "/api/recordings" ||
     pathname === "/api/recordings/initiate" ||
     /^\/api\/recordings\/[^/]+$/.test(pathname) ||

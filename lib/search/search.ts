@@ -1,19 +1,24 @@
-import { sql } from "drizzle-orm";
-import { db } from "@/db";
-import { renderSnippet, SNIPPET_START, SNIPPET_END } from "./snippet";
+import { sql } from "drizzle-orm"
+import { db } from "@/db"
+import { renderSnippet, SNIPPET_START, SNIPPET_END } from "./snippet"
+import { canReadUnownedLegacyRows } from "@/lib/auth/ownership"
 
 export interface SearchHit {
-  id: string;
-  title: string;
-  createdAt: Date;
-  snippet: string;
+  id: string
+  title: string
+  createdAt: Date
+  snippet: string
 }
 
-const HEADLINE_OPTS = `StartSel=${SNIPPET_START}, StopSel=${SNIPPET_END}, MaxFragments=2, MinWords=5, MaxWords=18, FragmentDelimiter= … `;
+const HEADLINE_OPTS = `StartSel=${SNIPPET_START}, StopSel=${SNIPPET_END}, MaxFragments=2, MinWords=5, MaxWords=18, FragmentDelimiter= … `
 
-export async function searchRecordings(q: string): Promise<SearchHit[]> {
-  const query = q.trim();
-  if (!query) return [];
+export async function searchRecordings(
+  ownerId: string,
+  q: string
+): Promise<SearchHit[]> {
+  const query = q.trim()
+  if (!query) return []
+  const includeUnownedLegacyRows = canReadUnownedLegacyRows(ownerId)
 
   const rows = (await db.execute(sql`
     SELECT r.id AS id,
@@ -22,16 +27,24 @@ export async function searchRecordings(q: string): Promise<SearchHit[]> {
            ts_headline('simple', t.full_text, websearch_to_tsquery('simple', ${query}), ${HEADLINE_OPTS}) AS snippet
     FROM transcriptions t
     JOIN recordings r ON r.id = t.recording_id
-    WHERE t.search_vector @@ websearch_to_tsquery('simple', ${query})
-       OR to_tsvector('simple', r.title) @@ websearch_to_tsquery('simple', ${query})
+    WHERE (r.owner_id = ${ownerId} OR (${includeUnownedLegacyRows} AND r.owner_id IS NULL))
+      AND (
+        t.search_vector @@ websearch_to_tsquery('simple', ${query})
+        OR to_tsvector('simple', r.title) @@ websearch_to_tsquery('simple', ${query})
+      )
     ORDER BY ts_rank(t.search_vector, websearch_to_tsquery('simple', ${query})) DESC
     LIMIT 20
-  `)) as unknown as Array<{ id: string; title: string; created_at: string | Date; snippet: string | null }>;
+  `)) as unknown as Array<{
+    id: string
+    title: string
+    created_at: string | Date
+    snippet: string | null
+  }>
 
   return rows.map((row) => ({
     id: row.id,
     title: row.title,
     createdAt: new Date(row.created_at),
     snippet: renderSnippet(row.snippet ?? ""),
-  }));
+  }))
 }

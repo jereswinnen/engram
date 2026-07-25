@@ -1,26 +1,21 @@
-import Link from "next/link";
-import { desc } from "drizzle-orm";
-import { db } from "@/db";
-import { recordings } from "@/db/schema";
+import Link from "next/link"
 import {
   Card,
   CardHeader,
   CardTitle,
   CardDescription,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { requireSession } from "@/lib/auth-guard";
+} from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { requireSession } from "@/lib/auth-guard"
+import { listOwnedRecordings } from "@/lib/recordings/store"
 
 export default async function HomePage() {
-  await requireSession();
-
-  const recs = await db.query.recordings.findMany({
-    orderBy: [desc(recordings.createdAt)],
-  });
+  const session = await requireSession()
+  const recs = await listOwnedRecordings(session.user.id)
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
+    <div className="mx-auto max-w-2xl px-4 py-8">
+      <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Recordings</h1>
         <Button asChild>
           <Link href="/upload">Upload</Link>
@@ -32,7 +27,7 @@ export default async function HomePage() {
         <div className="flex flex-col gap-3">
           {recs.map((rec) => (
             <Link key={rec.id} href={`/recordings/${rec.id}`}>
-              <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <Card className="cursor-pointer transition-shadow hover:shadow-md">
                 <CardHeader>
                   <CardTitle>{rec.title}</CardTitle>
                   <CardDescription>
@@ -51,5 +46,5 @@ export default async function HomePage() {
         </div>
       )}
     </div>
-  );
+  )
 }

@@ -19,6 +19,11 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
     label: "jeremys.engram.audio-writer",
     qos: .utility
   )
+  private let reconfigurationQueue = DispatchQueue(
+    label: "jeremys.engram.audio-reconfiguration",
+    qos: .userInitiated
+  )
+  private let audioEngineLock = NSLock()
   private let stateLock = NSLock()
 
   private var stream: SCStream?
@@ -32,6 +37,7 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
   private var lastMeterUpdate: TimeInterval = 0
   private var meterHandler: MeterHandler?
   private var failureHandler: FailureHandler?
+  private var configurationObserver: NSObjectProtocol?
 
   private static let mixFormat = AVAudioFormat(
     commonFormat: .pcmFormatFloat32,
@@ -98,10 +104,12 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
       guard let engine, let systemAudioPlayer else {
         throw RecorderError.invalidAudioFormat
       }
-      engine.prepare()
-      try engine.start()
-      systemAudioPlayer.play()
-      stateLock.withLock { isCapturing = true }
+      try audioEngineLock.withLock {
+        engine.prepare()
+        try engine.start()
+        systemAudioPlayer.play()
+        stateLock.withLock { isCapturing = true }
+      }
       try await stream.startCapture()
     } catch {
       await stopAfterFailedStart()
@@ -163,12 +171,6 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
     let engine = AVAudioEngine()
     let recordingMixer = AVAudioMixerNode()
     let systemAudioPlayer = AVAudioPlayerNode()
-    let input = engine.inputNode
-    let inputFormat = input.inputFormat(forBus: 0)
-    guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
-      throw RecorderError.invalidAudioFormat
-    }
-
     self.meterHandler = meterHandler
     self.failureHandler = failureHandler
     lastMeterUpdate = 0
@@ -190,11 +192,43 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
     engine.attach(recordingMixer)
     engine.attach(systemAudioPlayer)
     nodesAttached = true
+    try connectAudioGraph(
+      engine: engine,
+      recordingMixer: recordingMixer,
+      systemAudioPlayer: systemAudioPlayer
+    )
+
+    self.engine = engine
+    self.recordingMixer = recordingMixer
+    self.systemAudioPlayer = systemAudioPlayer
+    configurationObserver = NotificationCenter.default.addObserver(
+      forName: .AVAudioEngineConfigurationChange,
+      object: engine,
+      queue: nil
+    ) { [weak self, weak engine] _ in
+      guard let self, let engine else { return }
+      self.reconfigurationQueue.async { [weak self, weak engine] in
+        guard let self, let engine else { return }
+        self.recoverAudioEngineAfterConfigurationChange(engine)
+      }
+    }
+  }
+
+  private func connectAudioGraph(
+    engine: AVAudioEngine,
+    recordingMixer: AVAudioMixerNode,
+    systemAudioPlayer: AVAudioPlayerNode
+  ) throws {
+    let input = engine.inputNode
+    let inputFormat = input.inputFormat(forBus: 0)
+    guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
+      throw RecorderError.invalidAudioFormat
+    }
+
     engine.connect(input, to: recordingMixer, format: inputFormat)
     engine.connect(systemAudioPlayer, to: recordingMixer, format: Self.mixFormat)
     engine.connect(recordingMixer, to: engine.mainMixerNode, format: Self.mixFormat)
     engine.mainMixerNode.outputVolume = 0
-
     recordingMixer.installTap(
       onBus: 0,
       bufferSize: 1_024,
@@ -203,10 +237,49 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
       self?.consumeMixedAudio(buffer)
     }
     tapInstalled = true
+  }
 
-    self.engine = engine
-    self.recordingMixer = recordingMixer
-    self.systemAudioPlayer = systemAudioPlayer
+  private func recoverAudioEngineAfterConfigurationChange(
+    _ expectedEngine: AVAudioEngine
+  ) {
+    let recoveryError: Error? = audioEngineLock.withLock {
+      guard stateLock.withLock({ isCapturing }),
+        engine === expectedEngine,
+        !expectedEngine.isRunning,
+        let recordingMixer,
+        let systemAudioPlayer
+      else {
+        return nil
+      }
+
+      do {
+        systemAudioPlayer.stop()
+        expectedEngine.stop()
+        if tapInstalled {
+          recordingMixer.removeTap(onBus: 0)
+          tapInstalled = false
+        }
+        expectedEngine.disconnectNodeOutput(expectedEngine.inputNode)
+        expectedEngine.disconnectNodeInput(recordingMixer)
+        expectedEngine.disconnectNodeOutput(recordingMixer)
+        expectedEngine.disconnectNodeInput(systemAudioPlayer)
+        try connectAudioGraph(
+          engine: expectedEngine,
+          recordingMixer: recordingMixer,
+          systemAudioPlayer: systemAudioPlayer
+        )
+        expectedEngine.prepare()
+        try expectedEngine.start()
+        systemAudioPlayer.play()
+        return nil
+      } catch {
+        return error
+      }
+    }
+
+    if let recoveryError {
+      failureHandler?(recoveryError)
+    }
   }
 
   private func consumeMixedAudio(_ buffer: AVAudioPCMBuffer) {
@@ -268,41 +341,47 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
 
   @discardableResult
   private func finishAudioEngine() -> AudioWriteResult {
-    let engine = engine
-    let recordingMixer = recordingMixer
-    let systemAudioPlayer = systemAudioPlayer
+    audioEngineLock.withLock {
+      let engine = engine
+      let recordingMixer = recordingMixer
+      let systemAudioPlayer = systemAudioPlayer
 
-    systemAudioPlayer?.stop()
-    engine?.stop()
-    if tapInstalled, let recordingMixer {
-      recordingMixer.removeTap(onBus: 0)
-    }
-    tapInstalled = false
-    writerQueue.sync {}
-    audioFile = nil
-    stream = nil
-    systemAudioConverter = nil
-    meterHandler = nil
-    failureHandler = nil
-    if nodesAttached, let engine, let recordingMixer, let systemAudioPlayer {
-      engine.disconnectNodeOutput(engine.inputNode)
-      engine.disconnectNodeInput(recordingMixer)
-      engine.disconnectNodeOutput(recordingMixer)
-      engine.disconnectNodeInput(systemAudioPlayer)
-      engine.detach(systemAudioPlayer)
-      engine.detach(recordingMixer)
-      nodesAttached = false
-    }
-    if let engine {
-      engine.inputNode.auAudioUnit.deallocateRenderResources()
-      engine.outputNode.auAudioUnit.deallocateRenderResources()
-      engine.reset()
-    }
-    self.systemAudioPlayer = nil
-    self.recordingMixer = nil
-    self.engine = nil
-    return stateLock.withLock {
-      AudioWriteResult(error: writerError, frameCount: writtenFrameCount)
+      if let configurationObserver {
+        NotificationCenter.default.removeObserver(configurationObserver)
+        self.configurationObserver = nil
+      }
+      systemAudioPlayer?.stop()
+      engine?.stop()
+      if tapInstalled, let recordingMixer {
+        recordingMixer.removeTap(onBus: 0)
+      }
+      tapInstalled = false
+      writerQueue.sync {}
+      audioFile = nil
+      stream = nil
+      systemAudioConverter = nil
+      meterHandler = nil
+      failureHandler = nil
+      if nodesAttached, let engine, let recordingMixer, let systemAudioPlayer {
+        engine.disconnectNodeOutput(engine.inputNode)
+        engine.disconnectNodeInput(recordingMixer)
+        engine.disconnectNodeOutput(recordingMixer)
+        engine.disconnectNodeInput(systemAudioPlayer)
+        engine.detach(systemAudioPlayer)
+        engine.detach(recordingMixer)
+        nodesAttached = false
+      }
+      if let engine {
+        engine.inputNode.auAudioUnit.deallocateRenderResources()
+        engine.outputNode.auAudioUnit.deallocateRenderResources()
+        engine.reset()
+      }
+      self.systemAudioPlayer = nil
+      self.recordingMixer = nil
+      self.engine = nil
+      return stateLock.withLock {
+        AudioWriteResult(error: writerError, frameCount: writtenFrameCount)
+      }
     }
   }
 

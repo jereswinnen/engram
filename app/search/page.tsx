@@ -1,20 +1,20 @@
-import Link from "next/link";
-import { requireSession } from "@/lib/auth-guard";
-import { searchRecordings } from "@/lib/search/search";
-import { SearchBox } from "./search-box";
+import Link from "next/link"
+import { requireSession } from "@/lib/auth-guard"
+import { searchRecordings } from "@/lib/search/search"
+import { SearchBox } from "./search-box"
 
 export default async function SearchPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string }>
 }) {
-  await requireSession();
-  const { q = "" } = await searchParams;
-  const query = q.trim();
-  const results = query ? await searchRecordings(query) : [];
+  const session = await requireSession()
+  const { q = "" } = await searchParams
+  const query = q.trim()
+  const results = query ? await searchRecordings(session.user.id, query) : []
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8 flex flex-col gap-6">
+    <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
       <h1 className="text-xl font-semibold">Search</h1>
       <SearchBox initialQuery={q} />
 
@@ -42,5 +42,5 @@ export default async function SearchPage({
         ))}
       </ul>
     </div>
-  );
+  )
 }

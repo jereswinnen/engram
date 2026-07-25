@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import { db } from "@/db"
 import { recordings } from "@/db/schema"
 import { getStorage, buildAudioKey } from "@/lib/storage"
 import { runTranscription, runEnhancement } from "@/lib/pipeline"
-import { auth } from "@/auth"
-import { isRecordingRequestAuthorized } from "@/lib/recordings/auth"
-
-export { isRecordingRequestAuthorized as isAuthorized } from "@/lib/recordings/auth"
+import { isAuthFailure, requirePrincipal } from "@/lib/auth/policy"
+import { ownerPredicate } from "@/lib/auth/ownership"
 
 const MAX_DURATION_SECONDS = 2_147_483_647
 
@@ -77,29 +75,38 @@ export function parseRecordingUpload(form: FormData): ParseResult {
 }
 
 export async function GET(request: NextRequest) {
-  const session = await auth.api.getSession({ headers: request.headers })
-  if (!session)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const principal = await requirePrincipal(request, {
+    scopes: ["recordings:read"],
+  })
+  if (isAuthFailure(principal)) return principal
 
-  const rows = await db.query.recordings.findMany()
+  const rows = await db.query.recordings.findMany({
+    where: ownerPredicate(recordings.ownerId, principal.userId),
+  })
   return NextResponse.json(rows)
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await isRecordingRequestAuthorized(req))) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const principal = await requirePrincipal(req, {
+    scopes: ["recordings:write"],
+    mechanisms: ["session", "legacy-mac"],
+  })
+  if (isAuthFailure(principal)) return principal
 
   const form = await req.formData()
   const parsed = parseRecordingUpload(form)
   if ("error" in parsed) {
     return NextResponse.json({ error: parsed.error }, { status: 400 })
   }
-  const { file, title, source, durationSeconds, startedAt } = parsed.input
+  const { file, title, durationSeconds, startedAt } = parsed.input
+  // `source` is provenance, not a client-controlled authorization field.
+  const source = principal.mechanism === "session" ? "upload" : "mac"
 
   const [rec] = await db
     .insert(recordings)
     .values({
+      ownerId: principal.userId,
+      createdByConnectionId: principal.connectionId,
       title,
       source,
       storageKey: "pending",
@@ -118,11 +125,16 @@ export async function POST(req: NextRequest) {
   await db
     .update(recordings)
     .set({ storageKey: key })
-    .where(eq(recordings.id, rec.id))
+    .where(
+      and(
+        eq(recordings.id, rec.id),
+        ownerPredicate(recordings.ownerId, principal.userId)
+      )
+    )
 
   // fire-and-forget the pipeline (Phase 0: route stays warm long enough on Railway)
-  runTranscription(rec.id)
-    .then(() => runEnhancement(rec.id))
+  runTranscription(principal.userId, rec.id)
+    .then(() => runEnhancement(principal.userId, rec.id))
     .catch(() => {})
 
   return NextResponse.json(

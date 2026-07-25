@@ -5,9 +5,10 @@ keeps a recoverable local M4A, and uploads it directly to Engram.
 
 ## Current phases
 
-1. **Engram ingestion — complete.** The recorder uses its dedicated bearer token to
-   initialize an idempotent upload, sends audio directly to R2 with a short-lived
-   signed URL, and asks Engram to verify the stored byte count before processing.
+1. **Engram ingestion — complete.** The recorder signs in through the browser with
+   OAuth Authorization Code + PKCE, initializes an idempotent upload, sends audio
+   directly to R2 with a short-lived signed URL, and asks Engram to verify the stored
+   byte count before processing. The Engram access token is never sent to R2.
 2. **Native recording core — complete.** `AVAudioEngine` captures the microphone,
    `ScreenCaptureKit` supplies system audio, and a dedicated mixer writes 48 kHz,
    stereo, 96 kbps AAC to M4A.
@@ -22,16 +23,22 @@ keeps a recoverable local M4A, and uploads it directly to Engram.
 5. **Google Meet detection — complete.** Like Plaud, the app watches macOS power
    assertions for sustained WebRTC and browser-audio activity. It can ask before
    recording or automatically start and stop with the browser meeting.
-6. **Real-meeting validation — pending.** Sign the app with the intended Developer ID,
-   deploy the backend token, then compare several calls against Plaud before removing
-   any Plaud code.
+6. **OAuth rollout and legacy-disable observation — active.** Production browser
+   sign-in, recording, secure refresh-credential storage, restoration after a real Mac
+   app quit/relaunch, refresh rotation, and post-relaunch upload are verified. The
+   legacy server path is disabled; its code and configuration remain available through
+   the 30-day rollback window and must be removed only in a later release.
 
 ## Configure
 
-1. Generate a token with `openssl rand -hex 32`.
-2. Set the same value as `MAC_RECORDER_API_TOKEN` in the Engram deployment.
-3. Open Engram Recorder → Settings and enter the Engram base URL and token. The token
-   is stored in Keychain.
+1. Open Engram Recorder → Settings and enter the HTTPS Engram base URL. Debug builds
+   also permit HTTP on localhost for isolated development.
+2. Choose **Sign in to Engram**. The system browser completes login and returns to the
+   app through `jeremys.engram.recorder://oauth/callback`.
+3. The refresh credential is stored in an OAuth-specific Keychain record. Current
+   ad-hoc builds use the encrypted, non-synchronizing macOS login Keychain; properly
+   Developer-signed builds can migrate to the device-only Data Protection Keychain
+   after a verified durable copy. Access credentials remain in memory.
 4. Start with the menu-bar control or ⌘⇧R. Grant Microphone and Screen & System Audio
    Recording access when macOS asks.
 5. In Settings, choose whether meeting detection is Off, asks before recording, or
@@ -39,11 +46,15 @@ keeps a recoverable local M4A, and uploads it directly to Engram.
 
 Local audio and history are stored inside the sandboxed Application Support container.
 Successful uploads are retained locally for seven days; failed uploads are never
-deleted automatically.
+deleted automatically. Pre-OAuth or otherwise unbound local recordings require an
+explicit **Attach & Upload** confirmation. A queue attached to another server,
+account, or connection is never reassigned automatically.
 
 ## Build
 
 ```bash
+swift test --package-path engram-recorder
+
 xcodebuild \
   -project engram-recorder/engram-recorder.xcodeproj \
   -scheme "Engram Recorder" \
@@ -52,8 +63,9 @@ xcodebuild \
   build
 ```
 
-The target has App Sandbox, microphone input, and outgoing-network entitlements. Set
-your Apple development team in Xcode before distributing the app.
+The target has App Sandbox, microphone input, outgoing-network entitlements, and the
+exact OAuth callback scheme. Set your Apple development team in Xcode before
+distributing the app.
 
 ## Source layout
 

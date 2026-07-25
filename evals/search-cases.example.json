@@ -1,0 +1,7 @@
+[
+  {
+    "id": "remembered-topic-1",
+    "query": "What did we decide about the mobile launch?",
+    "expectedRecordingIds": ["replace-with-recording-uuid"]
+  }
+]

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { formatLabel } from "@/lib/transcript/speaker-names"
+import { nameForLabel } from "@/lib/transcript/speaker-names"
 
 export type TranscriptSegment = {
   start: number
@@ -19,6 +19,8 @@ export type TranscriptChunk = {
 type ChunkOptions = {
   targetCharacters?: number
   overlapSegments?: number
+  speakerMap?: Record<string, string>
+  context?: string[]
 }
 
 function timestamp(seconds: number): string {
@@ -59,16 +61,26 @@ export function chunkTranscript(
 ): TranscriptChunk[] {
   const targetCharacters = options.targetCharacters ?? 1_800
   const overlapSegments = options.overlapSegments ?? 2
+  const speakerMap = options.speakerMap ?? {}
+  const context = (options.context ?? [])
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join("\n")
+  const withContext = (content: string) =>
+    context ? `${context}\n\nTranscript passage:\n${content}` : content
   const usableSegments = segments.filter((segment) => segment.text.trim())
 
   if (usableSegments.length === 0) {
-    return chunkPlainText(fullText, targetCharacters).map((content, index) => ({
-      index,
-      content,
-      contentHash: hash(content),
-      startSeconds: null,
-      endSeconds: null,
-    }))
+    return chunkPlainText(fullText, targetCharacters).map((text, index) => {
+      const content = withContext(text)
+      return {
+        index,
+        content,
+        contentHash: hash(content),
+        startSeconds: null,
+        endSeconds: null,
+      }
+    })
   }
 
   const chunks: TranscriptChunk[] = []
@@ -81,7 +93,7 @@ export function chunkTranscript(
 
     while (end < usableSegments.length) {
       const segment = usableSegments[end]
-      const line = `[${timestamp(segment.start)}] ${formatLabel(segment.speaker ?? "?")}: ${segment.text.trim()}`
+      const line = `[${timestamp(segment.start)}] ${nameForLabel(segment.speaker ?? "?", speakerMap)}: ${segment.text.trim()}`
       if (
         lines.length > 0 &&
         characterCount + line.length + 1 > targetCharacters
@@ -93,7 +105,7 @@ export function chunkTranscript(
       end += 1
     }
 
-    const content = lines.join("\n")
+    const content = withContext(lines.join("\n"))
     chunks.push({
       index: chunks.length,
       content,

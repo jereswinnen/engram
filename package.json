@@ -17,7 +17,8 @@
     "db:migrate": "drizzle-kit migrate",
     "auth:provision-clients": "pnpm dlx tsx@4.20.6 scripts/register-oauth-clients.ts",
     "auth:cleanup-clients": "pnpm dlx tsx@4.20.6 scripts/cleanup-abandoned-oauth-clients.ts",
-    "search:backfill": "pnpm dlx tsx@4.20.6 scripts/backfill-transcript-embeddings.ts"
+    "search:backfill": "pnpm dlx tsx@4.20.6 scripts/backfill-transcript-embeddings.ts",
+    "search:evaluate": "pnpm dlx tsx@4.20.6 scripts/evaluate-search.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.73",

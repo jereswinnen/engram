@@ -36,6 +36,30 @@ from the original transcripts at any time.
 - [x] Confirm embedding ownership matches recording ownership for every row.
 - [x] Record the embedding coverage audit and rollback procedure.
 
+## Phase 5 — search quality foundation
+
+These changes prepare the shared search contract for web, iOS, and MCP. A result is
+a citation-ready transcript passage with a recording ID and timestamp, rather than
+only a recording-level match.
+
+- [x] Version enriched embeddings so a rebuild is explicit and resumable.
+- [x] Include recording titles, generated summaries, and resolved speaker names in
+  the text used for retrieval.
+- [x] Fuse exact keyword and semantic passage ranks using reciprocal-rank fusion.
+- [x] Cap each recording at three passages so one long transcript cannot crowd out
+  all other recordings.
+- [x] Add a versioned, paginated `/api/search` response shared by future clients.
+- [x] Group up to three timestamped passages beneath each recording in web search.
+- [x] Refresh derived embeddings after enhancement or speaker-name changes.
+- [x] Add a local evaluation harness for recall@3, recall@5, and reciprocal rank.
+- [ ] Apply the additive v2 migration in production.
+- [ ] Rebuild all non-empty transcript embeddings and verify coverage.
+- [ ] Run the first private search evaluation and record aggregate results.
+
+The migration keeps v1 rows readable throughout the rebuild. Each recording is
+switched to v2 in one transaction, and obsolete derived chunks are removed only
+after the replacement chunks have been written successfully.
+
 ## Rollback
 
 Set `SEMANTIC_SEARCH_ENABLED=false` to return immediately to the existing PostgreSQL
@@ -60,3 +84,14 @@ pnpm search:backfill -- --limit 10
 
 Repeat until the command reports zero candidates. A recording's chunks are written
 in one transaction, so a failed batch cannot leave a partial recording indexed.
+
+Create a private evaluation dataset by copying `evals/search-cases.example.json`.
+Use natural questions you genuinely remember asking, then associate each with the
+recording ID that should answer it. Do not commit the private dataset.
+
+```bash
+pnpm search:evaluate -- --dataset /path/to/private-search-cases.json --owner-id USER_ID
+```
+
+The report prints aggregate metrics and failed case IDs only. It does not print or
+persist query text, transcript text, or search snippets.

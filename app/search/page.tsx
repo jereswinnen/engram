@@ -17,7 +17,19 @@ export default async function SearchPage({
   const session = await requireSession()
   const { q = "" } = await searchParams
   const query = q.trim()
-  const results = query ? await searchRecordings(session.user.id, query) : []
+  const page = query
+    ? await searchRecordings(session.user.id, query, { limit: 50 })
+    : { results: [], pagination: { limit: 50, offset: 0, hasMore: false } }
+  const recordings = Array.from(
+    page.results
+      .reduce((groups, hit) => {
+        const group = groups.get(hit.recordingId)
+        if (group) group.passages.push(hit)
+        else groups.set(hit.recordingId, { hit, passages: [hit] })
+        return groups
+      }, new Map<string, { hit: (typeof page.results)[number]; passages: typeof page.results }>())
+      .values()
+  )
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
@@ -29,38 +41,55 @@ export default async function SearchPage({
       </div>
       <SearchBox initialQuery={q} />
 
-      {query && results.length === 0 && (
+      {query && page.results.length === 0 && (
         <p className="text-sm text-muted-foreground">No matches.</p>
       )}
 
-      <ul className="flex flex-col gap-4">
-        {results.map((hit) => (
-          <li key={hit.id}>
+      <ul className="flex flex-col gap-6">
+        {recordings.map(({ hit, passages }) => (
+          <li key={hit.recordingId} className="flex flex-col gap-2">
             <Link
-              href={`/recordings/${hit.id}?q=${encodeURIComponent(query)}${
-                hit.startSeconds === null ? "" : `&t=${hit.startSeconds}`
-              }`}
-              className="block hover:underline"
+              href={`/recordings/${hit.recordingId}`}
+              className="hover:underline"
             >
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium">{hit.title}</span>
-                {hit.matchType === "semantic" && (
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                    Related meaning
-                  </span>
-                )}
               </div>
-              <div className="flex gap-2 text-xs text-muted-foreground">
+              <div className="text-xs text-muted-foreground">
                 {new Date(hit.createdAt).toLocaleDateString("en-GB")}
-                {hit.startSeconds !== null && (
-                  <span>{formatTime(hit.startSeconds)}</span>
-                )}
               </div>
             </Link>
-            <p
-              className="mt-1 text-sm text-muted-foreground [&_mark]:bg-yellow-500/30 [&_mark]:text-foreground"
-              dangerouslySetInnerHTML={{ __html: hit.snippet }}
-            />
+            <ul className="flex flex-col gap-2 border-l pl-3">
+              {passages.slice(0, 3).map((passage) => (
+                <li key={passage.passageId}>
+                  <Link
+                    href={`/recordings/${passage.recordingId}?q=${encodeURIComponent(query)}${
+                      passage.startSeconds === null
+                        ? ""
+                        : `&t=${passage.startSeconds}`
+                    }`}
+                    className="group block"
+                  >
+                    <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground group-hover:text-foreground">
+                      {passage.startSeconds !== null && (
+                        <span>{formatTime(passage.startSeconds)}</span>
+                      )}
+                      {passage.matchType !== "keyword" && (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px]">
+                          {passage.matchType === "hybrid"
+                            ? "Strong match"
+                            : "Related meaning"}
+                        </span>
+                      )}
+                    </div>
+                    <p
+                      className="text-sm text-muted-foreground group-hover:text-foreground [&_mark]:bg-yellow-500/30 [&_mark]:text-foreground"
+                      dangerouslySetInnerHTML={{ __html: passage.snippet }}
+                    />
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </li>
         ))}
       </ul>

@@ -1,0 +1,3 @@
+ALTER TABLE "transcript_embeddings" ADD COLUMN "embedding_version" text DEFAULT 'transcript-passage-v1' NOT NULL;--> statement-breakpoint
+ALTER TABLE "transcript_embeddings" ADD COLUMN "search_vector" "tsvector" GENERATED ALWAYS AS (to_tsvector('simple', coalesce(content, ''))) STORED;--> statement-breakpoint
+CREATE INDEX "transcript_embeddings_search_idx" ON "transcript_embeddings" USING gin ("search_vector");

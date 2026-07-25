@@ -13,7 +13,10 @@ beforeEach(() => {
   requirePrincipal.mockReset()
   searchRecordings.mockReset()
   requirePrincipal.mockResolvedValue({ userId: "user-a" })
-  searchRecordings.mockResolvedValue([])
+  searchRecordings.mockResolvedValue({
+    results: [],
+    pagination: { limit: 20, offset: 0, hasMore: false },
+  })
 })
 
 describe("GET /api/search", () => {
@@ -27,7 +30,15 @@ describe("GET /api/search", () => {
     expect(requirePrincipal).toHaveBeenCalledWith(expect.any(Request), {
       scopes: ["transcripts:search"],
     })
-    expect(searchRecordings).toHaveBeenCalledWith("user-a", "mobile roadmap")
+    expect(searchRecordings).toHaveBeenCalledWith("user-a", "mobile roadmap", {
+      limit: 20,
+      offset: 0,
+    })
+    expect(await response.json()).toMatchObject({
+      version: "2026-07-25",
+      query: "mobile roadmap",
+      pagination: { limit: 20, offset: 0, hasMore: false },
+    })
   })
 
   it("rejects a missing query", async () => {
@@ -48,6 +59,16 @@ describe("GET /api/search", () => {
     )
 
     expect(response.status).toBe(401)
+    expect(searchRecordings).not.toHaveBeenCalled()
+  })
+
+  it("validates stable pagination parameters", async () => {
+    const { GET } = await import("./route")
+    const response = await GET(
+      new Request("http://localhost/api/search?q=anything&limit=51&offset=-1")
+    )
+
+    expect(response.status).toBe(400)
     expect(searchRecordings).not.toHaveBeenCalled()
   })
 })

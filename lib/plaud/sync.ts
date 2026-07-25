@@ -13,7 +13,6 @@ import {
 import type { PlaudFile } from "./mcp/types"
 import { ownerPredicate } from "@/lib/auth/ownership"
 import { getOwnedRecording, ownedRecordingWhere } from "@/lib/recordings/store"
-import { runTranscriptEmbedding } from "@/lib/search/embeddings"
 
 export interface SyncResult {
   ranAt: string
@@ -217,10 +216,7 @@ export async function syncPlaud(ownerId: string): Promise<SyncResult> {
           await runTranscription(ownerId, rec.id)
           let stored = await getOwnedRecording(ownerId, rec.id)
           if (stored?.status === "transcribed") {
-            await Promise.all([
-              runEnhancement(ownerId, rec.id),
-              runTranscriptEmbedding(ownerId, rec.id),
-            ])
+            await runEnhancement(ownerId, rec.id)
             stored = await getOwnedRecording(ownerId, rec.id)
           }
           // The pipeline swallows its own errors and parks the recording in "error" status

@@ -43,4 +43,25 @@ describe("chunkTranscript", () => {
   it("returns no chunks for an empty transcript", () => {
     expect(chunkTranscript([], "   ")).toEqual([])
   })
+
+  it("includes recording context and resolved speaker names in the hash", () => {
+    const [chunk] = chunkTranscript(
+      [{ start: 0, end: 10, text: "Ship it", speaker: "speaker_0" }],
+      "",
+      {
+        speakerMap: { speaker_0: "Jeremy" },
+        context: ["Recording title: Launch", "Recording summary: Mobile plan"],
+      }
+    )
+
+    expect(chunk.content).toContain("Recording title: Launch")
+    expect(chunk.content).toContain("[0:00] Jeremy: Ship it")
+    expect(chunk.contentHash).not.toBe(
+      chunkTranscript(
+        [{ start: 0, end: 10, text: "Ship it", speaker: "speaker_0" }],
+        "",
+        { speakerMap: { speaker_0: "Someone else" } }
+      )[0].contentHash
+    )
+  })
 })

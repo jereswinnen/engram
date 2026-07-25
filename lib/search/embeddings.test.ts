@@ -3,20 +3,26 @@ import { PgDialect } from "drizzle-orm/pg-core"
 
 const getOwnedRecording = vi.hoisted(() => vi.fn())
 const findFirst = vi.hoisted(() => vi.fn())
+const findEnhancement = vi.hoisted(() => vi.fn())
 const findMany = vi.hoisted(() => vi.fn())
 const execute = vi.hoisted(() => vi.fn())
 const insert = vi.hoisted(() => vi.fn())
 const transaction = vi.hoisted(() => vi.fn())
+const deleteRows = vi.hoisted(() => vi.fn())
+const deleteWhere = vi.hoisted(() => vi.fn())
 const values = vi.hoisted(() => vi.fn())
 const onConflictDoUpdate = vi.hoisted(() => vi.fn())
 const embed = vi.hoisted(() => vi.fn())
 const embedMany = vi.hoisted(() => vi.fn())
+const getRecordingSpeakerMap = vi.hoisted(() => vi.fn())
 
 vi.mock("@/lib/recordings/store", () => ({ getOwnedRecording }))
+vi.mock("@/lib/speakers/store", () => ({ getRecordingSpeakerMap }))
 vi.mock("@/db", () => ({
   db: {
     query: {
       transcriptions: { findFirst },
+      aiEnhancements: { findFirst: findEnhancement },
       transcriptEmbeddings: { findMany },
     },
     execute,
@@ -33,17 +39,21 @@ beforeEach(() => {
   getOwnedRecording.mockReset()
   findFirst.mockReset()
   findMany.mockReset()
+  findEnhancement.mockReset()
   execute.mockReset()
   insert.mockReset()
   transaction.mockReset()
+  deleteRows.mockReset()
+  deleteWhere.mockReset()
   values.mockReset()
   onConflictDoUpdate.mockReset()
   embed.mockReset()
   embedMany.mockReset()
+  getRecordingSpeakerMap.mockReset()
   process.env.OPENAI_API_KEY = "test-key"
   process.env.OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
 
-  getOwnedRecording.mockResolvedValue({ id: "recording-a" })
+  getOwnedRecording.mockResolvedValue({ id: "recording-a", title: "Roadmap" })
   findFirst.mockResolvedValue({
     id: "transcription-a",
     recordingId: "recording-a",
@@ -58,6 +68,8 @@ beforeEach(() => {
     ],
   })
   findMany.mockResolvedValue([])
+  findEnhancement.mockResolvedValue({ overview: "Plans for the mobile launch" })
+  getRecordingSpeakerMap.mockResolvedValue({ speaker_0: "Jeremy" })
   embedMany.mockResolvedValue({
     embeddings: [[0.1, 0.2]],
     usage: { tokens: 4 },
@@ -65,7 +77,11 @@ beforeEach(() => {
   onConflictDoUpdate.mockResolvedValue(undefined)
   values.mockReturnValue({ onConflictDoUpdate })
   insert.mockReturnValue({ values })
-  transaction.mockImplementation(async (callback) => callback({ insert }))
+  deleteWhere.mockResolvedValue(undefined)
+  deleteRows.mockReturnValue({ where: deleteWhere })
+  transaction.mockImplementation(async (callback) =>
+    callback({ insert, delete: deleteRows })
+  )
 })
 
 describe("transcript embeddings", () => {
@@ -91,10 +107,13 @@ describe("transcript embeddings", () => {
         recordingId: "recording-a",
         transcriptionId: "transcription-a",
         embeddingModel: "text-embedding-3-small",
+        embeddingVersion: "transcript-passage-v2",
         embedding: [0.1, 0.2],
+        content: expect.stringContaining("Recording title: Roadmap"),
       }),
     ])
     expect(onConflictDoUpdate).toHaveBeenCalledOnce()
+    expect(deleteRows).toHaveBeenCalledOnce()
     expect(result).toMatchObject({ chunks: 1, tokens: 4, skipped: false })
   })
 

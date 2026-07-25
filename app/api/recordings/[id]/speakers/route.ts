@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { setRecordingSpeaker } from "@/lib/speakers/store"
 import { isAuthFailure, requirePrincipal } from "@/lib/auth/policy"
+import { runTranscriptEmbedding } from "@/lib/search/embeddings"
 
 export async function PUT(
   request: NextRequest,
@@ -25,5 +26,6 @@ export async function PUT(
   if (!(await setRecordingSpeaker(principal.userId, id, label, name))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
+  await runTranscriptEmbedding(principal.userId, id)
   return NextResponse.json({ ok: true })
 }

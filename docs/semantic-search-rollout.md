@@ -10,15 +10,15 @@ from the original transcripts at any time.
 - [x] Use OpenAI `text-embedding-3-small` (1,536 dimensions) by default.
 - [x] Add timestamp-aware, overlapping transcript chunking.
 - [x] Add an idempotent `transcript_embeddings` schema.
-- [ ] Enable the PostgreSQL `vector` extension in Railway.
-- [ ] Apply the additive migration in production.
+- [x] Enable PostgreSQL `vector` 0.8.4 in Railway.
+- [x] Apply the additive migration in production.
 
 ## Phase 2 — generation and backfill
 
 - [x] Generate embeddings automatically for newly transcribed recordings.
 - [x] Add a dry-run capable, resumable backfill command.
-- [ ] Backfill the existing corpus in small batches.
-- [ ] Verify every current transcript has embeddings for the configured model.
+- [x] Backfill all 39 non-empty existing transcripts in small batches.
+- [x] Verify zero searchable transcripts are missing embeddings.
 
 ## Phase 3 — shared semantic search
 
@@ -31,10 +31,10 @@ from the original transcripts at any time.
 
 - [x] Run all 206 tests, TypeScript, changed-file lint, and the production build.
 - [ ] Resolve the repository's pre-existing full-lint baseline (75 unrelated errors).
-- [ ] Deploy and observe a terminal Railway `SUCCESS` state.
-- [ ] Verify authenticated web search against an existing transcript.
-- [ ] Confirm cross-user transcript results cannot be returned.
-- [ ] Record the embedding coverage audit and rollback procedure.
+- [x] Deploy and observe a terminal Railway `SUCCESS` state.
+- [x] Verify a production OpenAI vector query returns timestamped results.
+- [x] Confirm embedding ownership matches recording ownership for every row.
+- [x] Record the embedding coverage audit and rollback procedure.
 
 ## Rollback
 

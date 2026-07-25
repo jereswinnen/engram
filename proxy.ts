@@ -20,6 +20,7 @@ export function proxy(request: NextRequest) {
     pathname === "/login" ||
     pathname === "/oauth/consent" ||
     pathname.startsWith("/mcp") ||
+    pathname === "/api/search" ||
     pathname === "/api/recordings" ||
     pathname === "/api/recordings/initiate" ||
     /^\/api\/recordings\/[^/]+$/.test(pathname) ||

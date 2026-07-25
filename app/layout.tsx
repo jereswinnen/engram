@@ -1,4 +1,4 @@
-import { Geist_Mono, DM_Sans } from "next/font/google"
+import { Geist, Geist_Mono } from "next/font/google"
 import { headers } from "next/headers"
 
 import "./globals.css"
@@ -6,8 +6,9 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { AppHeader } from "@/components/app-header"
 import { auth } from "@/auth"
 import { cn } from "@/lib/utils"
+import { listOwnedRecordings } from "@/lib/recordings/store"
 
-const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-sans" })
+const fontSans = Geist({ subsets: ["latin"], variable: "--font-sans" })
 
 const fontMono = Geist_Mono({
   subsets: ["latin"],
@@ -30,6 +31,16 @@ export default async function RootLayout({
   children: React.ReactNode
 }>) {
   const session = await auth.api.getSession({ headers: await headers() })
+  const recentRecordings = session
+    ? (await listOwnedRecordings(session.user.id))
+        .slice(0, 12)
+        .map((recording) => ({
+          id: recording.id,
+          title: recording.title,
+          createdAt: recording.createdAt.toISOString(),
+          durationSeconds: recording.durationSeconds,
+        }))
+    : []
 
   return (
     <html
@@ -39,7 +50,7 @@ export default async function RootLayout({
         "antialiased",
         fontMono.variable,
         "font-sans",
-        dmSans.variable
+        fontSans.variable
       )}
     >
       <body>
@@ -47,9 +58,14 @@ export default async function RootLayout({
           {session && (
             <AppHeader
               initials={initials(session.user.name, session.user.email)}
+              name={session.user.name ?? session.user.email}
+              email={session.user.email}
+              recentRecordings={recentRecordings}
             />
           )}
-          <main>{children}</main>
+          <div className={cn("min-h-screen", session && "lg:pl-64")}>
+            {children}
+          </div>
         </ThemeProvider>
       </body>
     </html>

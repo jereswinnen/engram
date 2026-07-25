@@ -40,11 +40,18 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Engram</h1>
-          <p className="text-sm text-muted-foreground">Sign in to continue.</p>
+    <main className="flex min-h-screen items-center justify-center bg-muted/20 px-4 py-10">
+      <div className="w-full max-w-sm rounded-2xl border bg-background p-6 shadow-[0_18px_60px_rgba(0,0,0,0.06)] sm:p-8">
+        <div className="mb-7 text-center">
+          <p className="mb-4 text-sm font-semibold tracking-[-0.025em]">
+            Engram
+          </p>
+          <h1 className="text-xl font-semibold tracking-[-0.035em]">
+            Welcome back
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Sign in to your Engram workspace.
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -80,12 +87,17 @@ function LoginForm() {
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
-          <Button type="submit" className="w-full" disabled={pending}>
+          <Button
+            type="submit"
+            size="lg"
+            className="mt-2 w-full rounded-xl"
+            disabled={pending}
+          >
             {pending ? "Signing in…" : "Sign in"}
           </Button>
         </form>
       </div>
-    </div>
+    </main>
   )
 }
 

@@ -25,41 +25,52 @@ export default async function SettingsPage({
   const backups = await getBackups(session.user.id)
   const oauthConnections = await listOAuthConnections(session.user.id)
   return (
-    <section className="mx-auto max-w-2xl space-y-6 p-6">
-      <h1 className="text-2xl font-semibold">Settings</h1>
-      <PlaudSettings
-        connected={connected}
-        lastResult={sync?.lastResult ?? null}
-        oauthStatus={plaud ?? null}
-      />
-      <OAuthConnections
-        initial={oauthConnections.map((connection) => ({
-          id: connection.id,
-          label: connection.label,
-          clientId: connection.clientId,
-          status: connection.status,
-          scopes: connection.scopes,
-          createdAt: connection.createdAt.toISOString(),
-          lastUsedAt: connection.lastUsedAt?.toISOString() ?? null,
-          revokedAt: connection.revokedAt?.toISOString() ?? null,
-        }))}
-      />
-      <GlossarySettings
-        entries={glossary.map((g) => ({
-          id: g.id,
-          term: g.term,
-          aliases: g.aliases,
-        }))}
-      />
-      <Backups
-        initial={backups.map((b) => ({
-          id: b.id,
-          status: b.status,
-          sizeBytes: b.sizeBytes,
-          error: b.error,
-          createdAt: b.createdAt.toISOString(),
-        }))}
-      />
-    </section>
+    <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+      <header className="mb-6 border-b pb-5">
+        <p className="mb-1 text-xs font-medium text-muted-foreground">
+          Workspace preferences
+        </p>
+        <h1 className="text-2xl font-semibold tracking-[-0.035em]">Settings</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Manage integrations, transcription vocabulary, connected apps, and
+          exports.
+        </p>
+      </header>
+      <div className="grid items-start gap-4 xl:grid-cols-2">
+        <PlaudSettings
+          connected={connected}
+          lastResult={sync?.lastResult ?? null}
+          oauthStatus={plaud ?? null}
+        />
+        <OAuthConnections
+          initial={oauthConnections.map((connection) => ({
+            id: connection.id,
+            label: connection.label,
+            clientId: connection.clientId,
+            status: connection.status,
+            scopes: connection.scopes,
+            createdAt: connection.createdAt.toISOString(),
+            lastUsedAt: connection.lastUsedAt?.toISOString() ?? null,
+            revokedAt: connection.revokedAt?.toISOString() ?? null,
+          }))}
+        />
+        <GlossarySettings
+          entries={glossary.map((g) => ({
+            id: g.id,
+            term: g.term,
+            aliases: g.aliases,
+          }))}
+        />
+        <Backups
+          initial={backups.map((b) => ({
+            id: b.id,
+            status: b.status,
+            sizeBytes: b.sizeBytes,
+            error: b.error,
+            createdAt: b.createdAt.toISOString(),
+          }))}
+        />
+      </div>
+    </main>
   )
 }

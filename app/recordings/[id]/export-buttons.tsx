@@ -1,39 +1,56 @@
 "use client"
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { RiDownloadLine, RiFileCopyLine } from "@remixicon/react"
+import { useRef, useState } from "react"
+import {
+  RiArrowDownSLine,
+  RiDownloadLine,
+  RiFileCopyLine,
+  RiFileTextLine,
+} from "@remixicon/react"
 
 export function ExportButtons({ id }: { id: string }) {
   const [copied, setCopied] = useState(false)
+  const menuRef = useRef<HTMLDetailsElement>(null)
 
   async function copyMarkdown() {
     const res = await fetch(`/api/recordings/${id}/export?format=md`)
     if (!res.ok) return
     await navigator.clipboard.writeText(await res.text())
     setCopied(true)
+    menuRef.current?.removeAttribute("open")
     setTimeout(() => setCopied(false), 1500)
   }
 
   return (
-    <div className="flex gap-2">
-      <Button asChild variant="outline" size="sm">
-        <a href={`/api/recordings/${id}/export?format=md`}>
-          <RiDownloadLine data-icon="inline-start" />
-          <span className="hidden sm:inline">Markdown</span>
-          <span className="sm:hidden">.md</span>
+    <details ref={menuRef} className="group relative">
+      <summary className="flex h-8 cursor-pointer list-none items-center gap-1.5 rounded-lg border bg-background px-3 text-xs font-medium transition-colors marker:hidden hover:bg-muted">
+        <RiDownloadLine className="size-3.5" />
+        Export
+        <RiArrowDownSLine className="size-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="absolute top-10 right-0 z-30 w-52 overflow-hidden rounded-xl border bg-popover p-1.5 text-popover-foreground shadow-lg">
+        <a
+          href={`/api/recordings/${id}/export?format=md`}
+          className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs transition-colors hover:bg-muted"
+        >
+          <RiFileTextLine className="size-3.5 text-muted-foreground" />
+          Download Markdown
         </a>
-      </Button>
-      <Button asChild variant="outline" size="sm">
-        <a href={`/api/recordings/${id}/export?format=json`}>
-          <RiDownloadLine data-icon="inline-start" />
-          <span className="hidden sm:inline">JSON</span>
-          <span className="sm:hidden">.json</span>
+        <a
+          href={`/api/recordings/${id}/export?format=json`}
+          className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs transition-colors hover:bg-muted"
+        >
+          <RiDownloadLine className="size-3.5 text-muted-foreground" />
+          Download JSON
         </a>
-      </Button>
-      <Button variant="outline" size="sm" onClick={copyMarkdown}>
-        <RiFileCopyLine data-icon="inline-start" />
-        {copied ? "Copied" : <span className="hidden md:inline">Copy</span>}
-      </Button>
-    </div>
+        <button
+          type="button"
+          onClick={copyMarkdown}
+          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors hover:bg-muted"
+        >
+          <RiFileCopyLine className="size-3.5 text-muted-foreground" />
+          {copied ? "Copied" : "Copy as Markdown"}
+        </button>
+      </div>
+    </details>
   )
 }

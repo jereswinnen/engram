@@ -60,9 +60,14 @@ export function DeleteRecordingButton({
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>
-        <Button variant="destructive" size="sm">
-          <RiDeleteBinLine data-icon="inline-start" />
-          Delete
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          aria-label="Delete recording"
+          title="Delete recording"
+        >
+          <RiDeleteBinLine />
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>

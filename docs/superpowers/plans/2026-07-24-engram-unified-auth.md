@@ -1,7 +1,7 @@
 # Engram Unified Authentication Implementation Plan
 
 **Date:** 2026-07-24
-**Status:** Phase 0 and Phase 1A complete; Phase 2 OAuth server deployed to production with MCP disabled and legacy rollback auth retained; Phase 3 production sign-in, quit/relaunch restoration, refresh rotation, and post-relaunch recording upload are verified; the safety soak is active before Phase 4
+**Status:** Phase 0 and Phase 1A complete; Phase 2 OAuth server deployed to production with MCP disabled; Phase 3 production sign-in, quit/relaunch restoration, refresh rotation, and post-relaunch recording upload are verified; Phase 4 legacy authentication is disabled in production and its 30-day rollback observation window is active
 **Authority:** This is the source of truth for Engram authentication work until it is superseded by a newer dated plan.
 
 ## Goal
@@ -633,8 +633,8 @@ docs: document Engram OAuth deployment settings
   failed at that checkpoint). The subsequent post-relaunch recording test restored the
   credential, refreshed it, persisted the rotated refresh credential with status `0`,
   and uploaded successfully. The archive then contained eight uploaded entries and
-  eight M4A files. Legacy auth remains enabled for the short safety soak and the
-  remaining destructive/offline lifecycle checks.
+  eight M4A files. Legacy auth was subsequently disabled by feature flag; its code,
+  secret, and owner mapping remain available only for the Phase 4 rollback window.
 
 ### Verification matrix
 
@@ -689,7 +689,9 @@ docs: document Mac sign-in and recovery
 
 ### Steps
 
-- [ ] **Disable legacy auth behind a feature flag first.** Verify old static tokens return `401` while OAuth Mac upload/delete still pass.
+- [x] **Disable legacy auth behind a feature flag first.** `AUTH_LEGACY_MAC_ENABLED=false` is live in production.
+- [x] **Verify the old static token is rejected.** A syntactically valid, non-mutating upload probe with the production legacy credential returns `401`.
+- [ ] **Verify routine OAuth Mac use during the observation window.** The same unified-auth revision already passed production sign-in, relaunch, refresh rotation, and upload before the flag change; continue normal upload/delete use with the flag disabled.
 - [ ] **Observe the disabled state** for the agreed window and retain a documented emergency re-enable path.
 - [ ] **Remove server fallback code and tests** only in a later release:
   - `MAC_RECORDER_API_TOKEN`
@@ -698,6 +700,26 @@ docs: document Mac sign-in and recovery
   - legacy branches in recording upload/delete tests
 - [ ] **Remove Mac legacy Keychain migration** after the minimum supported Mac version is OAuth-capable.
 - [ ] **Update `.env.example`, `DEPLOY.md`, recorder README, and `PROGRESS.md`.**
+
+### Production disable record — 2026-07-25
+
+- Production flags are `AUTH_LEGACY_MAC_ENABLED=false`,
+  `AUTH_OAUTH_BEARER_ENABLED=true`, and `MCP_ENABLED=false`.
+- Changing the Railway variable initially rebuilt the GitHub-connected `main` source
+  at commit `2ff5d52`, which predates unified auth and therefore still accepted the
+  static token. No recording or database data was changed. The tested
+  `codex/unified-auth` workspace was immediately redeployed as deployment
+  `e5e7a9e8-f3a6-4e1c-b5ee-79d249001679`; its idempotent migrations completed and the
+  deployment reached `SUCCESS`.
+- Live verification returns `200` for OAuth authorization-server and API protected-
+  resource metadata, `404` for `/mcp`, and `401` when the real legacy credential is
+  presented to the recording API. The rejection probe contains no file and cannot
+  create a recording.
+- Keep the legacy code, `MAC_RECORDER_API_TOKEN`, and
+  `LEGACY_MAC_RECORDER_OWNER_ID` through at least 2026-08-24. If OAuth has a production
+  regression during that window, set `AUTH_LEGACY_MAC_ENABLED=true` and redeploy this
+  unified-auth revision. Do not trigger a GitHub-source rebuild from `main` until the
+  unified-auth branch has been merged.
 
 ### Gate
 

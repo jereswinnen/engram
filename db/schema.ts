@@ -292,6 +292,8 @@ export const recordings = pgTable(
     }),
     createdByConnectionId: uuid("created_by_connection_id"),
     title: text("title").notNull(),
+    originalTitle: text("original_title"),
+    titleOrigin: text("title_origin").notNull().default("legacy"),
     source: text("source").notNull().default("upload"),
     storageKey: text("storage_key").notNull(),
     contentType: text("content_type").notNull(),
@@ -316,6 +318,10 @@ export const recordings = pgTable(
     check(
       "recordings_connection_requires_owner_check",
       sql`${t.createdByConnectionId} is null or ${t.ownerId} is not null`
+    ),
+    check(
+      "recordings_title_origin_check",
+      sql`${t.titleOrigin} in ('user', 'filename', 'device', 'provider', 'generated', 'legacy')`
     ),
   ]
 )

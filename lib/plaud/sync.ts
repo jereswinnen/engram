@@ -193,6 +193,8 @@ export async function syncPlaud(ownerId: string): Promise<SyncResult> {
             .values({
               ownerId,
               title: r.name,
+              originalTitle: r.name,
+              titleOrigin: "provider",
               source: "plaud",
               storageKey: "pending",
               contentType,

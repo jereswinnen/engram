@@ -35,6 +35,8 @@ export async function POST(request: Request) {
         ownerId: principal.userId,
         createdByConnectionId: principal.connectionId,
         title,
+        originalTitle: title,
+        titleOrigin: "device",
         source: "mac",
         storageKey,
         contentType: CONTENT_TYPE,

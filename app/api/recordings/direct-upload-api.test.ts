@@ -135,6 +135,9 @@ describe("POST /api/recordings/initiate", () => {
       expect.objectContaining({
         id: recordingID,
         source: "mac",
+        title: "Weekly sync",
+        originalTitle: "Weekly sync",
+        titleOrigin: "device",
         ownerId: "user-1",
         createdByConnectionId: "00000000-0000-4000-8000-000000000001",
         storageKey: `audio/${recordingID}.m4a`,

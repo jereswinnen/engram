@@ -3,6 +3,13 @@
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import WaveSurfer from "wavesurfer.js"
+import {
+  RiForward15Line,
+  RiPauseFill,
+  RiPlayFill,
+  RiReplay15Line,
+  RiSearchLine,
+} from "@remixicon/react"
 import { activeSegmentIndex } from "@/lib/transcript/active-segment"
 import { firstMatchingSegmentIndex } from "@/lib/search/match"
 import { nameForLabel } from "@/lib/transcript/speaker-names"
@@ -49,6 +56,8 @@ export function TranscriptPlayer({
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [playbackRate, setPlaybackRate] = useState(1)
+  const [transcriptSearch, setTranscriptSearch] = useState("")
   const [active, setActive] = useState(-1)
   const [error, setError] = useState(false)
   const [nameMap, setNameMap] = useState<Record<string, string>>(speakerMap)
@@ -76,13 +85,13 @@ export function TranscriptPlayer({
     const ws = WaveSurfer.create({
       container: containerRef.current,
       media, // v7: use this media element (streams; no full pre-decode for playback)
-      height: 64,
-      waveColor: "#3f3f46",
-      progressColor: "#a1a1aa",
-      cursorColor: "#a1a1aa",
-      barWidth: 3,
-      barGap: 2,
-      barRadius: 3,
+      height: 42,
+      waveColor: "#dbe3e8",
+      progressColor: "#1976b9",
+      cursorColor: "#1976b9",
+      barWidth: 2,
+      barGap: 1.5,
+      barRadius: 2,
     })
     wsRef.current = ws
 
@@ -156,54 +165,113 @@ export function TranscriptPlayer({
     }
   }
 
+  function seekBy(delta: number) {
+    const next = Math.max(0, Math.min(duration, currentTime + delta))
+    wsRef.current?.setTime(next)
+  }
+
+  function cyclePlaybackRate() {
+    const rates = [1, 1.25, 1.5, 2]
+    const next = rates[(rates.indexOf(playbackRate) + 1) % rates.length]
+    wsRef.current?.setPlaybackRate(next)
+    setPlaybackRate(next)
+  }
+
+  const transcriptQuery = transcriptSearch.trim().toLocaleLowerCase()
+  const visibleSegments = segments
+    .map((segment, index) => ({ segment, index }))
+    .filter(({ segment }) =>
+      transcriptQuery
+        ? `${nameForLabel(segment.speaker ?? "Speaker ?", nameMap)} ${segment.text}`
+            .toLocaleLowerCase()
+            .includes(transcriptQuery)
+        : true
+    )
+
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-3">
+    <div className="flex min-w-0 flex-col gap-4">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         <button
           type="button"
           onClick={() => wsRef.current?.playPause()}
           aria-label={playing ? "Pause" : "Play"}
-          className="rounded-md border px-3 py-1 text-sm hover:bg-muted"
+          className="grid size-9 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary/85"
         >
-          {playing ? "Pause" : "Play"}
+          {playing ? (
+            <RiPauseFill className="size-4" />
+          ) : (
+            <RiPlayFill className="ml-0.5 size-4" />
+          )}
         </button>
-        <span className="text-xs text-muted-foreground tabular-nums">
+        <button
+          type="button"
+          onClick={() => seekBy(-15)}
+          aria-label="Back 15 seconds"
+          className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <RiReplay15Line className="size-4" />
+        </button>
+        <button
+          type="button"
+          onClick={cyclePlaybackRate}
+          aria-label={`Playback speed ${playbackRate}x`}
+          className="h-8 shrink-0 rounded-lg px-1.5 text-xs font-medium tabular-nums hover:bg-muted"
+        >
+          {playbackRate}x
+        </button>
+        <button
+          type="button"
+          onClick={() => seekBy(15)}
+          aria-label="Forward 15 seconds"
+          className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <RiForward15Line className="size-4" />
+        </button>
+
+        <div className="min-w-20 flex-1" ref={containerRef} />
+        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
           {formatTime(currentTime)} / {formatTime(duration)}
         </span>
       </div>
 
-      <div ref={containerRef} className="w-full" />
       {error && <p className="text-sm text-destructive">Audio unavailable.</p>}
 
       {chapters && chapters.length > 0 && (
-        <div className="flex flex-col gap-1 text-sm">
-          <h3 className="font-medium">Chapters</h3>
-          {chapters.map((c, i) => {
-            const seekable =
-              c.startSeconds != null &&
-              c.startSeconds >= 0 &&
-              (duration === 0 || c.startSeconds <= duration)
-            return (
-              <button
-                key={i}
-                type="button"
-                disabled={!seekable}
-                onClick={() => {
-                  if (seekable) wsRef.current?.setTime(c.startSeconds!)
-                }}
-                className="text-left disabled:opacity-60"
-              >
-                {c.startSeconds != null && (
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {formatTime(c.startSeconds)}{" "}
+        <details className="rounded-lg border px-3 py-2 text-sm">
+          <summary className="cursor-pointer font-medium">
+            Chapters · {chapters.length}
+          </summary>
+          <div className="mt-2 flex flex-col gap-1 border-t pt-2">
+            {chapters.map((chapter, index) => {
+              const seekable =
+                chapter.startSeconds != null &&
+                chapter.startSeconds >= 0 &&
+                (duration === 0 || chapter.startSeconds <= duration)
+              return (
+                <button
+                  key={index}
+                  type="button"
+                  disabled={!seekable}
+                  onClick={() => {
+                    if (seekable) wsRef.current?.setTime(chapter.startSeconds!)
+                  }}
+                  className="rounded-md px-1.5 py-1 text-left hover:bg-muted disabled:opacity-60"
+                >
+                  {chapter.startSeconds != null && (
+                    <span className="mr-1.5 text-xs text-muted-foreground tabular-nums">
+                      {formatTime(chapter.startSeconds)}
+                    </span>
+                  )}
+                  <span className="font-medium">{chapter.title}</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    — {chapter.gist}
                   </span>
-                )}
-                <span className="font-medium">{c.title}</span> —{" "}
-                <span className="text-muted-foreground">{c.gist}</span>
-              </button>
-            )
-          })}
-        </div>
+                </button>
+              )
+            })}
+          </div>
+        </details>
       )}
 
       {segments.length > 0 && (
@@ -215,15 +283,26 @@ export function TranscriptPlayer({
               ))}
             </datalist>
           )}
-          <div className="mt-2 flex max-h-96 flex-col gap-1 overflow-y-auto font-mono text-sm">
-            {segments.map((seg, i) => {
+          <div className="relative">
+            <RiSearchLine className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="search"
+              value={transcriptSearch}
+              onChange={(event) => setTranscriptSearch(event.target.value)}
+              placeholder="Search transcript"
+              aria-label="Search transcript"
+              className="h-9 w-full rounded-lg border bg-background pr-3 pl-9 text-sm transition-colors outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
+            />
+          </div>
+          <div className="flex max-h-[min(700px,calc(100vh-320px))] min-h-80 flex-col overflow-y-auto pr-1 text-sm">
+            {visibleSegments.map(({ segment: seg, index: i }) => {
               const label = seg.speaker ?? ""
               const displayName = nameForLabel(label || "Speaker ?", nameMap)
               const isEditing = editingLabel === label && label !== ""
               return (
                 <div
                   key={i}
-                  className={`flex items-baseline gap-1 rounded px-1 ${i === active ? "bg-muted" : ""}`}
+                  className={`grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-lg px-2 py-2 ${i === active ? "bg-primary/8" : "hover:bg-muted/45"}`}
                 >
                   <button
                     type="button"
@@ -231,66 +310,74 @@ export function TranscriptPlayer({
                       segmentRefs.current[i] = el
                     }}
                     onClick={() => wsRef.current?.setTime(seg.start)}
-                    className="shrink-0 cursor-pointer text-left"
+                    className="cursor-pointer self-start text-left"
                   >
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-muted-foreground tabular-nums">
                       {formatTime(seg.start)}
                     </span>
-                  </button>{" "}
-                  {isEditing ? (
-                    <form
-                      className="inline-flex items-center gap-1"
-                      onSubmit={(e) => {
-                        e.preventDefault()
-                        void submitRename(label, editValue)
-                      }}
-                    >
-                      <input
-                        autoFocus
-                        list="speaker-directory"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onBlur={() => {
-                          // Fix 1: Escape sets cancelledRef so the blur triggered by
-                          // unmounting the input doesn't also fire a submit
-                          if (cancelledRef.current) {
-                            cancelledRef.current = false
-                            return
-                          }
+                  </button>
+                  <div className="min-w-0 leading-5">
+                    {isEditing ? (
+                      <form
+                        className="mb-0.5 inline-flex items-center gap-1"
+                        onSubmit={(e) => {
+                          e.preventDefault()
                           void submitRename(label, editValue)
                         }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Escape") {
-                            // Fix 1: mark as cancelled before setEditingLabel so the
-                            // ensuing onBlur (from unmount) knows not to submit
-                            cancelledRef.current = true
-                            setEditingLabel(null)
+                      >
+                        <input
+                          autoFocus
+                          list="speaker-directory"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => {
+                            // Fix 1: Escape sets cancelledRef so the blur triggered by
+                            // unmounting the input doesn't also fire a submit
+                            if (cancelledRef.current) {
+                              cancelledRef.current = false
+                              return
+                            }
+                            void submitRename(label, editValue)
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") {
+                              // Fix 1: mark as cancelled before setEditingLabel so the
+                              // ensuing onBlur (from unmount) knows not to submit
+                              cancelledRef.current = true
+                              setEditingLabel(null)
+                            }
+                          }}
+                          placeholder={displayName}
+                          className="w-28 rounded border px-1 text-xs font-medium"
+                        />
+                      </form>
+                    ) : (
+                      <button
+                        type="button"
+                        title="Click to rename speaker"
+                        onClick={() => {
+                          if (label) {
+                            setEditingLabel(label)
+                            setEditValue(nameMap[label] ?? "")
                           }
                         }}
-                        placeholder={displayName}
-                        className="w-28 rounded border px-1 text-xs font-medium"
-                      />
-                    </form>
-                  ) : (
-                    <button
-                      type="button"
-                      title="Click to rename speaker"
-                      onClick={() => {
-                        if (label) {
-                          setEditingLabel(label)
-                          setEditValue(nameMap[label] ?? "")
-                        }
-                      }}
-                      className="shrink-0 cursor-pointer font-medium decoration-dotted hover:underline"
-                    >
-                      {displayName}
-                    </button>
-                  )}
-                  {": "}
-                  <span className="break-words">{seg.text}</span>
+                        className="mr-1.5 cursor-pointer font-medium decoration-dotted hover:underline"
+                      >
+                        {displayName}
+                      </button>
+                    )}
+                    <span className="break-words text-foreground/85">
+                      {seg.text}
+                    </span>
+                  </div>
                 </div>
               )
             })}
+            {visibleSegments.length === 0 && (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                No transcript matches.
+              </p>
+            )}
           </div>
         </>
       )}

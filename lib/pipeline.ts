@@ -15,6 +15,7 @@ import {
 import { getRecordingSpeakerMap } from "@/lib/speakers/store"
 import { getOwnedRecording, ownedRecordingWhere } from "@/lib/recordings/store"
 import { runTranscriptEmbedding } from "@/lib/search/embeddings"
+import { applyGeneratedRecordingTitle } from "@/lib/recordings/titles"
 
 async function setStatus(
   ownerId: string,
@@ -100,6 +101,7 @@ export async function runEnhancement(
       openQuestions: e.openQuestions,
       model: config.llmModel(),
     })
+    await applyGeneratedRecordingTitle(ownerId, id, e.title)
     await setStatus(ownerId, id, "done")
     await runTranscriptEmbedding(ownerId, id)
   } catch (err) {

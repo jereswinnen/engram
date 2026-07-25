@@ -27,7 +27,7 @@ vi.mock("@/lib/storage", () => ({
   getStorage: () => ({ delete: mocks.deleteObject }),
 }))
 
-import { DELETE } from "./route"
+import { DELETE, GET } from "./route"
 
 function request(id = "recording-1", headers: Record<string, string> = {}) {
   return {
@@ -51,6 +51,9 @@ beforeEach(() => {
     ownerId: "user-1",
     createdByConnectionId: "00000000-0000-4000-8000-000000000001",
     storageKey: "audio/recording-1.m4a",
+    title: "Generated meeting title",
+    titleOrigin: "generated",
+    status: "done",
   })
   mocks.deleteObject.mockResolvedValue(undefined)
   mocks.deleteWhere.mockResolvedValue(undefined)
@@ -60,6 +63,34 @@ afterEach(() => {
   delete process.env.MAC_RECORDER_API_TOKEN
   delete process.env.LEGACY_MAC_RECORDER_OWNER_ID
   delete process.env.AUTH_LEGACY_MAC_ENABLED
+})
+
+describe("GET /api/recordings/[id]", () => {
+  it("returns compact processing metadata to the owning Mac connection", async () => {
+    mocks.getSession.mockResolvedValue(null)
+    const { request: req, context } = request("recording-1", {
+      authorization: "Bearer recorder-secret",
+    })
+
+    const response = await GET(req, context)
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      id: "recording-1",
+      title: "Generated meeting title",
+      titleOrigin: "generated",
+      status: "done",
+    })
+  })
+
+  it("does not turn the write-scoped endpoint into a browser read endpoint", async () => {
+    const { request: req, context } = request()
+
+    const response = await GET(req, context)
+
+    expect(response.status).toBe(403)
+    expect(mocks.findRecording).not.toHaveBeenCalled()
+  })
 })
 
 describe("DELETE /api/recordings/[id]", () => {

@@ -47,6 +47,8 @@ ELEVENLABS_API_KEY=<your ElevenLabs key>
 
 # LLM (OpenAI)
 OPENAI_API_KEY=<your OpenAI key>
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+SEMANTIC_SEARCH_ENABLED=true
 LLM_MODEL=gpt-5.4-mini-2026-03-17
 
 # Cloudflare R2 (see Section 4)

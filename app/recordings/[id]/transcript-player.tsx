@@ -1,70 +1,77 @@
-"use client";
+"use client"
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import WaveSurfer from "wavesurfer.js";
-import { activeSegmentIndex } from "@/lib/transcript/active-segment";
-import { firstMatchingSegmentIndex } from "@/lib/search/match";
-import { nameForLabel } from "@/lib/transcript/speaker-names";
+import { useEffect, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
+import WaveSurfer from "wavesurfer.js"
+import { activeSegmentIndex } from "@/lib/transcript/active-segment"
+import { firstMatchingSegmentIndex } from "@/lib/search/match"
+import { nameForLabel } from "@/lib/transcript/speaker-names"
 
-type Segment = { start: number; end: number; text: string; speaker?: string | null };
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
+type Segment = {
+  start: number
+  end: number
+  text: string
+  speaker?: string | null
 }
 
-type Chapter = { title: string; gist: string; startSeconds?: number | null };
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
+  return `${m}:${s.toString().padStart(2, "0")}`
+}
+
+type Chapter = { title: string; gist: string; startSeconds?: number | null }
 
 export function TranscriptPlayer({
   audioSrc,
   segments,
   highlightQuery,
+  initialTime,
   chapters,
   speakerMap = {},
   directory = [],
   recordingId = "",
 }: {
-  audioSrc: string;
-  segments: Segment[];
-  highlightQuery?: string;
-  chapters?: Chapter[];
-  speakerMap?: Record<string, string>;
-  directory?: string[];
-  recordingId?: string;
+  audioSrc: string
+  segments: Segment[]
+  highlightQuery?: string
+  initialTime?: number
+  chapters?: Chapter[]
+  speakerMap?: Record<string, string>
+  directory?: string[]
+  recordingId?: string
 }) {
-  const router = useRouter();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const wsRef = useRef<WaveSurfer | null>(null);
-  const segmentRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const segmentsRef = useRef(segments);
-  const [playing, setPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [active, setActive] = useState(-1);
-  const [error, setError] = useState(false);
-  const [nameMap, setNameMap] = useState<Record<string, string>>(speakerMap);
+  const router = useRouter()
+  const containerRef = useRef<HTMLDivElement>(null)
+  const wsRef = useRef<WaveSurfer | null>(null)
+  const segmentRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const segmentsRef = useRef(segments)
+  const [playing, setPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [active, setActive] = useState(-1)
+  const [error, setError] = useState(false)
+  const [nameMap, setNameMap] = useState<Record<string, string>>(speakerMap)
   // editingLabel: the diarized label currently being renamed (e.g. "SPEAKER_00")
-  const [editingLabel, setEditingLabel] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
+  const [editingLabel, setEditingLabel] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState("")
   // cancelledRef: true when Escape was pressed — tells onBlur to skip the submit
-  const cancelledRef = useRef(false);
+  const cancelledRef = useRef(false)
   // submittingRef: true while submitRename is running — prevents double-PUT (Enter then blur)
-  const submittingRef = useRef(false);
+  const submittingRef = useRef(false)
 
   // Sync segmentsRef with the latest segments prop.
   useEffect(() => {
-    segmentsRef.current = segments;
-  });
+    segmentsRef.current = segments
+  })
 
   // Init Wavesurfer once. `audioSrc` is stable for the page's lifetime.
   // Decouple from segments to avoid re-initialization on prop identity change.
   useEffect(() => {
-    if (!containerRef.current) return;
-    const media = document.createElement("audio");
-    media.src = audioSrc; // streaming playback via the MediaElement path
-    media.preload = "metadata";
+    if (!containerRef.current) return
+    const media = document.createElement("audio")
+    media.src = audioSrc // streaming playback via the MediaElement path
+    media.preload = "metadata"
 
     const ws = WaveSurfer.create({
       container: containerRef.current,
@@ -76,67 +83,76 @@ export function TranscriptPlayer({
       barWidth: 3,
       barGap: 2,
       barRadius: 3,
-    });
-    wsRef.current = ws;
+    })
+    wsRef.current = ws
 
     const onTime = (t: number) => {
-      setCurrentTime(t);
-      setActive(activeSegmentIndex(segmentsRef.current, t));
-    };
-    ws.on("timeupdate", onTime);
+      setCurrentTime(t)
+      setActive(activeSegmentIndex(segmentsRef.current, t))
+    }
+    ws.on("timeupdate", onTime)
     ws.on("ready", () => {
-      setDuration(ws.getDuration());
-      if (highlightQuery) {
-        const idx = firstMatchingSegmentIndex(segmentsRef.current, highlightQuery);
+      setDuration(ws.getDuration())
+      if (initialTime !== undefined) {
+        ws.setTime(initialTime)
+        setActive(activeSegmentIndex(segmentsRef.current, initialTime))
+      } else if (highlightQuery) {
+        const idx = firstMatchingSegmentIndex(
+          segmentsRef.current,
+          highlightQuery
+        )
         if (idx >= 0) {
-          setActive(idx);
-          ws.setTime(segmentsRef.current[idx].start);
+          setActive(idx)
+          ws.setTime(segmentsRef.current[idx].start)
         }
       }
-    });
-    ws.on("play", () => setPlaying(true));
-    ws.on("pause", () => setPlaying(false));
-    ws.on("error", () => setError(true));
+    })
+    ws.on("play", () => setPlaying(true))
+    ws.on("pause", () => setPlaying(false))
+    ws.on("error", () => setError(true))
 
     return () => {
-      ws.destroy();
-      wsRef.current = null;
-    };
-  }, [audioSrc]);
+      ws.destroy()
+      wsRef.current = null
+    }
+  }, [audioSrc, highlightQuery, initialTime])
 
   // Auto-scroll the active segment into view as it changes.
   useEffect(() => {
     if (active >= 0) {
-      segmentRefs.current[active]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      segmentRefs.current[active]?.scrollIntoView({
+        block: "nearest",
+        behavior: "smooth",
+      })
     }
-  }, [active]);
+  }, [active])
 
   async function submitRename(label: string, name: string) {
     // Fix 2: guard against double-fire (Enter → onSubmit → setEditingLabel(null) → onBlur)
-    if (submittingRef.current) return;
-    submittingRef.current = true;
-    setEditingLabel(null);
+    if (submittingRef.current) return
+    submittingRef.current = true
+    setEditingLabel(null)
     try {
-      const trimmed = name.trim();
+      const trimmed = name.trim()
       const res = await fetch(`/api/recordings/${recordingId}/speakers`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ label, name: trimmed }),
-      });
+      })
       // Fix 3: only apply optimistic update when the server accepted the change
-      if (!res.ok) return;
+      if (!res.ok) return
       if (trimmed) {
-        setNameMap((m) => ({ ...m, [label]: trimmed }));
+        setNameMap((m) => ({ ...m, [label]: trimmed }))
       } else {
         setNameMap((m) => {
-          const next = { ...m };
-          delete next[label];
-          return next;
-        });
+          const next = { ...m }
+          delete next[label]
+          return next
+        })
       }
-      router.refresh();
+      router.refresh()
     } finally {
-      submittingRef.current = false;
+      submittingRef.current = false
     }
   }
 
@@ -151,7 +167,9 @@ export function TranscriptPlayer({
         >
           {playing ? "Pause" : "Play"}
         </button>
-        <span className="text-xs text-muted-foreground tabular-nums">{formatTime(currentTime)} / {formatTime(duration)}</span>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {formatTime(currentTime)} / {formatTime(duration)}
+        </span>
       </div>
 
       <div ref={containerRef} className="w-full" />
@@ -161,15 +179,29 @@ export function TranscriptPlayer({
         <div className="flex flex-col gap-1 text-sm">
           <h3 className="font-medium">Chapters</h3>
           {chapters.map((c, i) => {
-            const seekable = c.startSeconds != null && c.startSeconds >= 0 && (duration === 0 || c.startSeconds <= duration);
+            const seekable =
+              c.startSeconds != null &&
+              c.startSeconds >= 0 &&
+              (duration === 0 || c.startSeconds <= duration)
             return (
-              <button key={i} type="button" disabled={!seekable}
-                onClick={() => { if (seekable) wsRef.current?.setTime(c.startSeconds!); }}
-                className="text-left disabled:opacity-60">
-                {c.startSeconds != null && <span className="text-muted-foreground text-xs tabular-nums">{formatTime(c.startSeconds)} </span>}
-                <span className="font-medium">{c.title}</span> — <span className="text-muted-foreground">{c.gist}</span>
+              <button
+                key={i}
+                type="button"
+                disabled={!seekable}
+                onClick={() => {
+                  if (seekable) wsRef.current?.setTime(c.startSeconds!)
+                }}
+                className="text-left disabled:opacity-60"
+              >
+                {c.startSeconds != null && (
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {formatTime(c.startSeconds)}{" "}
+                  </span>
+                )}
+                <span className="font-medium">{c.title}</span> —{" "}
+                <span className="text-muted-foreground">{c.gist}</span>
               </button>
-            );
+            )
           })}
         </div>
       )}
@@ -183,11 +215,11 @@ export function TranscriptPlayer({
               ))}
             </datalist>
           )}
-          <div className="mt-2 flex max-h-96 flex-col gap-1 overflow-y-auto text-sm font-mono">
+          <div className="mt-2 flex max-h-96 flex-col gap-1 overflow-y-auto font-mono text-sm">
             {segments.map((seg, i) => {
-              const label = seg.speaker ?? "";
-              const displayName = nameForLabel(label || "Speaker ?", nameMap);
-              const isEditing = editingLabel === label && label !== "";
+              const label = seg.speaker ?? ""
+              const displayName = nameForLabel(label || "Speaker ?", nameMap)
+              const isEditing = editingLabel === label && label !== ""
               return (
                 <div
                   key={i}
@@ -196,20 +228,21 @@ export function TranscriptPlayer({
                   <button
                     type="button"
                     ref={(el) => {
-                      segmentRefs.current[i] = el;
+                      segmentRefs.current[i] = el
                     }}
                     onClick={() => wsRef.current?.setTime(seg.start)}
-                    className="cursor-pointer text-left shrink-0"
+                    className="shrink-0 cursor-pointer text-left"
                   >
-                    <span className="text-muted-foreground text-xs">{formatTime(seg.start)}</span>
-                  </button>
-                  {" "}
+                    <span className="text-xs text-muted-foreground">
+                      {formatTime(seg.start)}
+                    </span>
+                  </button>{" "}
                   {isEditing ? (
                     <form
                       className="inline-flex items-center gap-1"
                       onSubmit={(e) => {
-                        e.preventDefault();
-                        void submitRename(label, editValue);
+                        e.preventDefault()
+                        void submitRename(label, editValue)
                       }}
                     >
                       <input
@@ -220,19 +253,22 @@ export function TranscriptPlayer({
                         onBlur={() => {
                           // Fix 1: Escape sets cancelledRef so the blur triggered by
                           // unmounting the input doesn't also fire a submit
-                          if (cancelledRef.current) { cancelledRef.current = false; return; }
-                          void submitRename(label, editValue);
+                          if (cancelledRef.current) {
+                            cancelledRef.current = false
+                            return
+                          }
+                          void submitRename(label, editValue)
                         }}
                         onKeyDown={(e) => {
                           if (e.key === "Escape") {
                             // Fix 1: mark as cancelled before setEditingLabel so the
                             // ensuing onBlur (from unmount) knows not to submit
-                            cancelledRef.current = true;
-                            setEditingLabel(null);
+                            cancelledRef.current = true
+                            setEditingLabel(null)
                           }
                         }}
                         placeholder={displayName}
-                        className="rounded border px-1 text-xs font-medium w-28"
+                        className="w-28 rounded border px-1 text-xs font-medium"
                       />
                     </form>
                   ) : (
@@ -241,11 +277,11 @@ export function TranscriptPlayer({
                       title="Click to rename speaker"
                       onClick={() => {
                         if (label) {
-                          setEditingLabel(label);
-                          setEditValue(nameMap[label] ?? "");
+                          setEditingLabel(label)
+                          setEditValue(nameMap[label] ?? "")
                         }
                       }}
-                      className="font-medium hover:underline decoration-dotted cursor-pointer shrink-0"
+                      className="shrink-0 cursor-pointer font-medium decoration-dotted hover:underline"
                     >
                       {displayName}
                     </button>
@@ -253,11 +289,11 @@ export function TranscriptPlayer({
                   {": "}
                   <span className="break-words">{seg.text}</span>
                 </div>
-              );
+              )
             })}
           </div>
         </>
       )}
     </div>
-  );
+  )
 }

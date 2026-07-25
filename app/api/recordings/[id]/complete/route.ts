@@ -11,6 +11,7 @@ import {
   recordingBelongsToConnection,
 } from "@/lib/recordings/store"
 import { getStorage } from "@/lib/storage"
+import { runTranscriptEmbedding } from "@/lib/search/embeddings"
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -92,7 +93,12 @@ export async function POST(request: Request, context: RouteContext) {
 
   if (transitioned.length > 0) {
     runTranscription(principal.userId, recording.id)
-      .then(() => runEnhancement(principal.userId, recording.id))
+      .then(() =>
+        Promise.all([
+          runEnhancement(principal.userId, recording.id),
+          runTranscriptEmbedding(principal.userId, recording.id),
+        ])
+      )
       .catch(() => {})
   }
 

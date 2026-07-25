@@ -6,6 +6,7 @@ import { getStorage, buildAudioKey } from "@/lib/storage"
 import { runTranscription, runEnhancement } from "@/lib/pipeline"
 import { isAuthFailure, requirePrincipal } from "@/lib/auth/policy"
 import { ownerPredicate } from "@/lib/auth/ownership"
+import { runTranscriptEmbedding } from "@/lib/search/embeddings"
 
 const MAX_DURATION_SECONDS = 2_147_483_647
 
@@ -134,7 +135,12 @@ export async function POST(req: NextRequest) {
 
   // fire-and-forget the pipeline (Phase 0: route stays warm long enough on Railway)
   runTranscription(principal.userId, rec.id)
-    .then(() => runEnhancement(principal.userId, rec.id))
+    .then(() =>
+      Promise.all([
+        runEnhancement(principal.userId, rec.id),
+        runTranscriptEmbedding(principal.userId, rec.id),
+      ])
+    )
     .catch(() => {})
 
   return NextResponse.json(

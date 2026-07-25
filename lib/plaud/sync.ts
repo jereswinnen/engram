@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 import { db } from "@/db"
 import { recordings, syncState } from "@/db/schema"
 import { getStorage, buildAudioKey } from "@/lib/storage"
@@ -13,6 +13,7 @@ import {
 import type { PlaudFile } from "./mcp/types"
 import { ownerPredicate } from "@/lib/auth/ownership"
 import { getOwnedRecording, ownedRecordingWhere } from "@/lib/recordings/store"
+import { runTranscriptEmbedding } from "@/lib/search/embeddings"
 
 export interface SyncResult {
   ranAt: string
@@ -147,7 +148,9 @@ export async function syncPlaud(ownerId: string): Promise<SyncResult> {
         where: ownerPredicate(recordings.ownerId, ownerId),
       })
       const existingFileIds = new Set(
-        existing.map((r: any) => r.plaudFileId).filter(Boolean) as string[]
+        existing
+          .map((recording) => recording.plaudFileId)
+          .filter((fileId): fileId is string => fileId !== null)
       )
 
       const candidates = selectNewRecordings(all, checkpointMs, existingFileIds)
@@ -214,7 +217,10 @@ export async function syncPlaud(ownerId: string): Promise<SyncResult> {
           await runTranscription(ownerId, rec.id)
           let stored = await getOwnedRecording(ownerId, rec.id)
           if (stored?.status === "transcribed") {
-            await runEnhancement(ownerId, rec.id)
+            await Promise.all([
+              runEnhancement(ownerId, rec.id),
+              runTranscriptEmbedding(ownerId, rec.id),
+            ])
             stored = await getOwnedRecording(ownerId, rec.id)
           }
           // The pipeline swallows its own errors and parks the recording in "error" status

@@ -30,12 +30,17 @@ export default async function RecordingPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ q?: string }>
+  searchParams: Promise<{ q?: string; t?: string }>
 }) {
   const session = await requireSession()
 
   const { id } = await params
-  const { q } = await searchParams
+  const { q, t } = await searchParams
+  const requestedTime = t === undefined ? Number.NaN : Number(t)
+  const initialTime =
+    Number.isFinite(requestedTime) && requestedTime >= 0
+      ? requestedTime
+      : undefined
 
   const [bundle, speakerMap, speakerDirectory] = await Promise.all([
     getOwnedRecordingBundle(session.user.id, id),
@@ -70,6 +75,7 @@ export default async function RecordingPage({
         audioSrc={`/api/recordings/${id}/audio`}
         segments={transcription?.segments ?? []}
         highlightQuery={q}
+        initialTime={initialTime}
         chapters={enhancement?.chapters ?? []}
         speakerMap={speakerMap}
         directory={speakerDirectory.map((s) => s.name)}

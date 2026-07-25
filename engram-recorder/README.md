@@ -43,6 +43,8 @@ keeps a recoverable local M4A, and uploads it directly to Engram.
    Recording access when macOS asks.
 5. In Settings, choose whether meeting detection is Off, asks before recording, or
    records automatically. Ask before recording is the default.
+6. Optionally enable **Launch Engram at login**. If macOS requires approval, use the
+   provided shortcut to System Settings → General → Login Items.
 
 Local audio and history are stored inside the sandboxed Application Support container.
 Successful uploads are retained locally for seven days; failed uploads are never
@@ -88,6 +90,8 @@ distributing the app.
 - Verify meeting detection in Chrome and Safari while muted and unmuted. Confirm that
   ordinary browser media does not trigger it, a manual stop does not immediately
   restart, and leaving a meeting automatically stops only a meeting-started recording.
+- Toggle Launch Engram at login, confirm its status in System Settings, then sign out
+  and back in to verify the menu-bar app starts automatically.
 
 The capsule's “keep out of screen captures” option uses the native window-sharing
 exclusion as a best effort. Screen-sharing applications can use different capture

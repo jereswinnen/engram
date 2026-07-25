@@ -6,7 +6,6 @@ struct MenuBarView: View {
 
   @Bindable var controller: RecorderController
   @Environment(\.dismiss) private var dismiss
-  @Environment(\.openSettings) private var openSettings
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -37,9 +36,7 @@ struct MenuBarView: View {
       Divider()
 
       HStack {
-        Button {
-          openSettings()
-        } label: {
+        SettingsLink {
           Label("Settings", systemImage: "gearshape")
         }
         .buttonStyle(.plain)
@@ -242,7 +239,7 @@ private struct RecordingRow: View {
     alert.addButton(withTitle: deleteTitle).hasDestructiveAction = true
     alert.addButton(withTitle: "Cancel")
 
-    NSApp.activate(ignoringOtherApps: true)
+    NSApp.activate()
     guard alert.runModal() == .alertFirstButtonReturn else { return }
     controller.deleteRecording(recording.id)
   }
@@ -257,7 +254,7 @@ private struct RecordingRow: View {
     alert.addButton(withTitle: "Delete Everywhere").hasDestructiveAction = true
     alert.addButton(withTitle: "Cancel")
 
-    NSApp.activate(ignoringOtherApps: true)
+    NSApp.activate()
     guard alert.runModal() == .alertFirstButtonReturn else { return }
     controller.deleteRecording(recording.id, fromEngram: true)
   }

@@ -56,7 +56,7 @@ func accessIdentity() throws {
   #expect(identity.connectionID == "connection-456")
 }
 
-@Test("OAuth credentials persist in the device-only login Keychain")
+@Test("OAuth credentials persist in the non-synchronizing login Keychain")
 func oauthCredentialPersistenceLocation() {
   // Ad-hoc Mac builds do not have a stable signed application identifier for
   // Data Protection Keychain items across process launches.

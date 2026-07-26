@@ -1,42 +1,54 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { RiRefreshLine } from "@remixicon/react"
+import { Button } from "@/components/ui/button"
 
-export default function RegenerateButton({ recordingId }: { recordingId: string }) {
-  const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export default function RegenerateButton({
+  recordingId,
+}: {
+  recordingId: string
+}) {
+  const router = useRouter()
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function handleRegenerate() {
-    setLoading(true);
-    setError(null);
+    setLoading(true)
+    setError(null)
     try {
       const res = await fetch(`/api/recordings/${recordingId}/regenerate`, {
         method: "POST",
-      });
+      })
       if (res.ok) {
-        router.refresh();
+        router.refresh()
       } else {
-        setError("Regeneration failed. Please try again.");
+        setError("Regeneration failed. Please try again.")
       }
     } catch {
-      setError("Regeneration failed. Please try again.");
+      setError("Regeneration failed. Please try again.")
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      <Button variant="outline" size="sm" onClick={handleRegenerate} disabled={loading}>
+    <div className="flex flex-col items-start gap-1.5">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleRegenerate}
+        disabled={loading}
+        className="-ml-3 text-muted-foreground"
+      >
+        <RiRefreshLine className={loading ? "animate-spin" : ""} />
         {loading ? "Regenerating…" : "Regenerate summary"}
       </Button>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[11px] text-muted-foreground">
         Renamed a speaker? Regenerate to update owners &amp; summary.
       </p>
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
-  );
+  )
 }

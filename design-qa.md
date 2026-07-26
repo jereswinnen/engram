@@ -1,68 +1,59 @@
-# Engram Workspace Redesign — Design QA
+# Engram Recording Detail Polish — Design QA
 
 ## Evidence
 
-- Source visual truth: `/Users/jeremy/.codex/generated_images/019f936a-90e9-74e3-8713-58e0427a730b/exec-9a05f040-d9bb-484e-b13e-f12baf0b778b.png`
-- Final implementation screenshot: `/private/tmp/engram-workspace-final-v2.png`
-- Mobile implementation screenshot: `/private/tmp/engram-workspace-mobile-final.png`
-- Full-view comparison: `/private/tmp/engram-design-comparison-final-v2.jpg`
-- Focused main-workspace comparison: `/private/tmp/engram-design-focus-main-v2.jpg`
-- Focused insights comparison: `/private/tmp/engram-design-focus-insights.jpg`
-- Reference pixels: 1487 × 1058.
-- Desktop implementation: 1280 × 720 screenshot at a 1280 × 720 CSS viewport and device pixel ratio 2. The reference was proportionally normalized to 1280 px wide and top-cropped to the same 720 px content region for comparison; the screenshot API returned CSS-pixel dimensions.
-- Mobile implementation: 390 × 844 screenshot at a 390 × 844 CSS viewport.
-- State: authenticated-style recording detail fixture, light theme, insights expanded, transcript unfiltered for the final capture.
+- Source visual direction: `/Users/jeremy/.codex/generated_images/019f936a-90e9-74e3-8713-58e0427a730b/exec-9a05f040-d9bb-484e-b13e-f12baf0b778b.png`
+- Final desktop implementation: `/private/tmp/engram-detail-polish-desktop.png`
+- Side-by-side comparison: `/private/tmp/engram-detail-design-comparison.png`
+- Desktop viewport: 1487 × 1058 CSS pixels.
+- Mobile viewport: 390 × 844 CSS pixels.
+- State: authenticated-style fixture, light theme, recording complete, notes expanded, transcript unfiltered.
 
 ## Findings
 
 No actionable P0, P1, or P2 issues remain.
 
-- Fonts and typography: Geist provides the neutral, compact interface character of the selected direction. The final title stays on one line at the desktop QA viewport, body copy remains readable at 12–13 px with controlled line height, timestamps use tabular numerals, and long recording titles truncate in the sidebar.
-- Spacing and layout rhythm: the implementation preserves the selected three-pane hierarchy while intentionally tightening the left rail and insights rail to give the transcript more working room. Dividers, 8–12 px radii, restrained shadows, and compact control heights are consistent. There is no horizontal overflow at either tested viewport.
-- Colors and visual tokens: the neutral warm-white/near-black palette matches the reference intent. Semantic status color is limited to the small completion icon. Light and dark theme switching both render correctly.
-- Image quality and asset fidelity: the selected visual contains no raster product imagery. All visible interface symbols use the existing Remix Icon library; no placeholder imagery, custom SVG art, CSS drawings, gradients, or emoji substitutes were introduced.
-- Copy and content: labels are concise and product-specific. “Chapters” and “Export” expose existing functionality without AI branding or badges. Search-result language treats semantic matching as normal product behavior.
-- Icons: navigation, metadata, playback, search, insights, settings, export, and destructive actions use one icon family at consistent optical sizes.
-- Responsiveness and accessibility: the desktop workspace becomes a single-column mobile flow with a compact top navigation. The 390 px layout has no horizontal overflow, one semantic `main`, labeled icon buttons, keyboard-reachable native controls, visible focus styling, and practical tap targets.
-- Interactions tested: transcript filtering, chapter menu open/close, insight disclosure controls, theme switching, desktop navigation affordances, and mobile reflow.
-- Browser console: no errors or warnings in the final production-mode desktop or mobile captures.
+- Layout and hierarchy: the user-selected two-column structure is preserved after the navigation rail. The main column is a centered, max-width notes workspace; the right column is a dedicated transcript workspace. Both now use matched headings and vertical rhythm.
+- Visual direction: the implementation carries forward the source's compact monochrome navigation, neutral surfaces, thin dividers, restrained rounding, and dense productivity-tool character. It intentionally adapts the source's three-pane content layout into the requested two-column detail view.
+- Notes workspace: the overview receives clear first-read emphasis. Key points, decisions, action items, and questions form one calm disclosure surface, making the page easier to scan without fragmenting it into decorative cards.
+- Transcript workspace: playback is grouped into a single bordered control surface, search and chapter navigation share one toolbar row, and transcript segments use quieter resting states with a precise active state.
+- Typography and spacing: Geist, tabular timing, compact metadata, measured line lengths, and 11–14 px supporting text maintain the existing Engram system while adding breathing room around the title and workspace sections.
+- Color and assets: the design stays warm-neutral and monochrome except for semantic status/destructive colors. All interface symbols use Remix Icon; no gradients, emoji, handcrafted SVGs, placeholder artwork, or decorative AI badges were introduced.
+- Responsiveness: the 390 px layout stacks notes before transcript, keeps controls within the viewport, and reports `scrollWidth === innerWidth` with no horizontal overflow.
+- Accessibility: native disclosures retain keyboard behavior, icon-only actions remain labeled, search has a visible label/shortcut, focus styles remain available, and semantic `main`/`aside` regions are preserved.
+- Interactions tested: transcript search filtered down to the matching segment; disclosure click changed the Decisions section from open to closed; desktop and mobile reflow both rendered correctly.
+- Browser diagnostics: no errors or warnings were present in the final local preview; development-only HMR and React DevTools messages were informational.
 
-## Comparison History
+## Comparison Pass
 
-### Pass 1 — blocked
+### Pass 1 — adjustments made
 
-- [P2] The desktop title wrapped earlier than the reference, changing the above-the-fold hierarchy.
-  - Fix: reduced the desktop title scale from 1.55 rem to 1.35 rem while preserving the mobile size and weight.
-  - Post-fix evidence: `/private/tmp/engram-design-focus-main-v2.jpg` shows the final one-line title at the desktop QA viewport.
-- [P2] The full-width chapter disclosure added an extra row between playback and search, making the transcript feel less compact than the selected direction.
-  - Fix: moved chapters into a compact, keyboard-accessible menu beside transcript search.
-  - Post-fix evidence: `/private/tmp/engram-workspace-final-v2.png` shows search and chapters sharing one toolbar row.
-- [P2] The theme control initially produced a server/client attribute mismatch when the system theme was dark.
-  - Fix: deferred resolved-theme-dependent icon and label rendering until client mount.
-  - Post-fix evidence: final production-mode desktop and mobile console checks contain no warnings or errors.
+- The first fixture used a zero-duration audio data URI and surfaced an “Audio unavailable” error that was unrelated to the production experience.
+  - Fix: replaced it with a valid silent WAV fixture so the real player component could be inspected without a false error state.
+- Speaker fixtures initially rendered their raw labels through the real transcript naming logic.
+  - Fix: supplied the same speaker map used by production, validating the intended Jeremy/Alex display state.
 
 ### Pass 2 — passed
 
-- Re-captured desktop and mobile in production mode after the fixes.
-- Re-ran full-view and focused comparisons against the selected source.
-- Verified transcript filtering reduces the visible transcript to the matching segment.
-- Verified the chapter disclosure opens and exposes both chapter entries.
-- Verified 390 px mobile rendering has `scrollWidth === innerWidth` and exactly one semantic `main`.
+- Re-captured the 1487 × 1058 desktop state.
+- Compared source direction and implementation together in one 1920 × 1080 browser view.
+- Verified the 390 × 844 mobile layout has no horizontal overflow.
+- Verified transcript filtering and native disclosure behavior.
 
 ## Follow-up Polish
 
-- [P3] The silent QA audio fixture cannot reproduce a realistic waveform. The production recording page retains the real WaveSurfer audio source and waveform behavior; this is a fixture limitation, not an implementation shortcut.
-- [P3] The selected mock includes tags and people sections that do not exist in Engram’s current data model. They were intentionally omitted instead of shipping decorative, non-functional UI.
+- [P3] The silent QA fixture shows a flat waveform. Production retains the real recording waveform and audio behavior; this is a fixture-only limitation.
+- [P3] The selected visual includes tags and people, which are not present in Engram's current data model and remain intentionally omitted.
 
 ## Implementation Checklist
 
-- [x] Persistent compact recording rail.
-- [x] Three-pane recording workspace.
-- [x] Compact playback and transcript tools.
-- [x] Collapsible insights and chapter navigation.
-- [x] Compact export and safe delete actions.
-- [x] Redesigned library, search, settings, and login surfaces.
+- [x] Two-column content layout after the navigation rail.
+- [x] Centered, max-width recording notes workspace.
+- [x] Dedicated transcript workspace on the right.
+- [x] Refined overview and grouped disclosure surface.
+- [x] Consolidated playback, search, and chapter controls.
+- [x] Improved transcript reading and active states.
 - [x] Desktop and mobile responsive verification.
-- [x] Keyboard, semantic, and console checks.
+- [x] Interaction and browser-diagnostic verification.
 
 final result: passed

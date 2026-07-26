@@ -205,13 +205,13 @@ export function TranscriptPlayer({
     )
 
   return (
-    <div className="flex min-w-0 flex-col gap-3 xl:h-full xl:min-h-0">
-      <div className="flex min-w-0 items-center gap-1.5 sm:gap-2.5">
+    <div className="flex min-w-0 flex-col gap-3.5 xl:h-full xl:min-h-0">
+      <div className="flex min-w-0 items-center gap-1.5 rounded-2xl border bg-card p-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.025)] sm:gap-2">
         <button
           type="button"
           onClick={() => wsRef.current?.playPause()}
           aria-label={playing ? "Pause" : "Play"}
-          className="grid size-10 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm transition hover:scale-[1.02] hover:bg-primary/85 active:scale-[0.98]"
+          className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground transition hover:bg-primary/80 active:scale-[0.98]"
         >
           {playing ? (
             <RiPauseFill className="size-4.5" />
@@ -231,7 +231,7 @@ export function TranscriptPlayer({
           type="button"
           onClick={cyclePlaybackRate}
           aria-label={`Playback speed ${playbackRate}x`}
-          className="h-8 shrink-0 rounded-lg px-1.5 text-[11px] font-medium tabular-nums transition-colors hover:bg-muted"
+          className="h-8 shrink-0 rounded-lg px-1.5 text-[10px] font-medium tabular-nums transition-colors hover:bg-muted"
         >
           {playbackRate}x
         </button>
@@ -244,8 +244,8 @@ export function TranscriptPlayer({
           <RiForward15Line className="size-4" />
         </button>
 
-        <div className="min-w-20 flex-1" ref={containerRef} />
-        <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums sm:text-[11px]">
+        <div className="mx-1 min-w-16 flex-1" ref={containerRef} />
+        <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
           {formatTime(currentTime)} / {formatTime(duration)}
         </span>
       </div>
@@ -261,7 +261,7 @@ export function TranscriptPlayer({
               ))}
             </datalist>
           )}
-          <div className="mt-0.5 flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <div className="relative min-w-0 flex-1">
               <RiSearchLine className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -271,7 +271,7 @@ export function TranscriptPlayer({
                 onChange={(event) => setTranscriptSearch(event.target.value)}
                 placeholder="Search transcript"
                 aria-label="Search transcript"
-                className="h-9 w-full rounded-lg border bg-background pr-16 pl-9 text-xs transition-colors outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/15"
+                className="h-9 w-full rounded-xl border bg-card pr-16 pl-9 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-colors outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/15"
               />
               <kbd className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 rounded border bg-muted/45 px-1.5 py-0.5 font-sans text-[9px] text-muted-foreground">
                 ⌘F
@@ -279,7 +279,7 @@ export function TranscriptPlayer({
             </div>
             {chapters && chapters.length > 0 && (
               <details className="group relative shrink-0">
-                <summary className="flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-lg border bg-background px-2.5 text-xs font-medium transition-colors marker:hidden hover:bg-muted">
+                <summary className="flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-xl border bg-card px-2.5 text-xs font-medium shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-colors marker:hidden hover:bg-muted">
                   <RiListUnordered className="size-3.5 text-muted-foreground" />
                   <span className="hidden sm:inline">Chapters</span>
                   <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
@@ -320,7 +320,7 @@ export function TranscriptPlayer({
               </details>
             )}
           </div>
-          <div className="flex min-h-80 flex-col overflow-y-auto pr-1 text-sm xl:min-h-0 xl:flex-1">
+          <div className="flex min-h-80 flex-col gap-0.5 overflow-y-auto pr-1 text-sm xl:min-h-0 xl:flex-1">
             {visibleSegments.map(({ segment: seg, index: i }) => {
               const label = seg.speaker ?? ""
               const displayName = nameForLabel(label || "Speaker ?", nameMap)
@@ -328,7 +328,7 @@ export function TranscriptPlayer({
               return (
                 <div
                   key={i}
-                  className={`grid grid-cols-[4rem_minmax(0,1fr)] gap-3 rounded-lg border-l-2 px-2.5 py-2.5 transition-colors ${i === active ? "border-foreground bg-muted/60" : "border-transparent hover:bg-muted/35"}`}
+                  className={`grid grid-cols-[3.5rem_minmax(0,1fr)] gap-3 rounded-xl border px-3 py-3 transition-[background-color,border-color,box-shadow] ${i === active ? "border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.025)]" : "border-transparent hover:border-border/70 hover:bg-card/70"}`}
                 >
                   <button
                     type="button"
@@ -338,7 +338,9 @@ export function TranscriptPlayer({
                     onClick={() => wsRef.current?.setTime(seg.start)}
                     className="cursor-pointer self-start text-left"
                   >
-                    <span className="text-xs text-muted-foreground tabular-nums">
+                    <span
+                      className={`text-[11px] tabular-nums ${i === active ? "font-medium text-foreground" : "text-muted-foreground"}`}
+                    >
                       {formatTime(seg.start)}
                     </span>
                   </button>
@@ -392,7 +394,7 @@ export function TranscriptPlayer({
                         {displayName}
                       </button>
                     )}
-                    <span className="break-words text-foreground/80">
+                    <span className="break-words text-foreground/75">
                       {seg.text}
                     </span>
                   </div>

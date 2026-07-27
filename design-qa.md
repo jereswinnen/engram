@@ -1,59 +1,61 @@
-# Engram Recording Detail Polish — Design QA
+# Engram Graphite Pulse Waveform — Design QA
 
 ## Evidence
 
-- Source visual direction: `/Users/jeremy/.codex/generated_images/019f936a-90e9-74e3-8713-58e0427a730b/exec-9a05f040-d9bb-484e-b13e-f12baf0b778b.png`
-- Final desktop implementation: `/private/tmp/engram-detail-polish-desktop.png`
-- Side-by-side comparison: `/private/tmp/engram-detail-design-comparison.png`
-- Desktop viewport: 1487 × 1058 CSS pixels.
-- Mobile viewport: 390 × 844 CSS pixels.
-- State: authenticated-style fixture, light theme, recording complete, notes expanded, transcript unfiltered.
+- Source visual truth: `/private/tmp/engram-detail-polish-desktop.png`
+- Final light implementation: `/private/tmp/engram-waveform-shader-final-light.png`
+- Final dark implementation: `/private/tmp/engram-waveform-shader-dark-motion.png`
+- Mobile implementation: `/private/tmp/engram-waveform-shader-mobile-motion.png`
+- Full-view comparison: `/private/tmp/engram-waveform-shader-comparison.png`
+- Focused waveform comparison: `/private/tmp/engram-waveform-shader-comparison-focused.png`
+- Source and desktop implementation: 1487 × 1058 pixels at a 1487 × 1058 CSS viewport.
+- Mobile implementation: 390 × 844 pixels at a 390 × 844 CSS viewport.
+- State: authenticated-style fixture, synthetic four-second audio, light and dark themes, playback active around 0.6 seconds, transcript unfiltered.
 
 ## Findings
 
 No actionable P0, P1, or P2 issues remain.
 
-- Layout and hierarchy: the user-selected two-column structure is preserved after the navigation rail. The main column is a centered, max-width notes workspace; the right column is a dedicated transcript workspace. Both now use matched headings and vertical rhythm.
-- Visual direction: the implementation carries forward the source's compact monochrome navigation, neutral surfaces, thin dividers, restrained rounding, and dense productivity-tool character. It intentionally adapts the source's three-pane content layout into the requested two-column detail view.
-- Notes workspace: the overview receives clear first-read emphasis. Key points, decisions, action items, and questions form one calm disclosure surface, making the page easier to scan without fragmenting it into decorative cards.
-- Transcript workspace: playback is grouped into a single bordered control surface, search and chapter navigation share one toolbar row, and transcript segments use quieter resting states with a precise active state.
-- Typography and spacing: Geist, tabular timing, compact metadata, measured line lengths, and 11–14 px supporting text maintain the existing Engram system while adding breathing room around the title and workspace sections.
-- Color and assets: the design stays warm-neutral and monochrome except for semantic status/destructive colors. All interface symbols use Remix Icon; no gradients, emoji, handcrafted SVGs, placeholder artwork, or decorative AI badges were introduced.
-- Responsiveness: the 390 px layout stacks notes before transcript, keeps controls within the viewport, and reports `scrollWidth === innerWidth` with no horizontal overflow.
-- Accessibility: native disclosures retain keyboard behavior, icon-only actions remain labeled, search has a visible label/shortcut, focus styles remain available, and semantic `main`/`aside` regions are preserved.
-- Interactions tested: transcript search filtered down to the matching segment; disclosure click changed the Decisions section from open to closed; desktop and mobile reflow both rendered correctly.
-- Browser diagnostics: no errors or warnings were present in the final local preview; development-only HMR and React DevTools messages were informational.
+- Fonts and typography: the shader does not alter Geist typography, title wrapping, timing labels, metadata, or transcript density. Player labels remain crisp above the visual treatment.
+- Spacing and layout rhythm: the WebGL canvas is contained inside the existing 36 px waveform slot. The toolbar height, control spacing, transcript grid, two-column proportions, radii, and shadows remain unchanged from the selected source screen.
+- Colors and visual tokens: Graphite Pulse stays monochrome. It uses a near-black field in light mode and a soft near-white field in dark mode, preserving the warm neutral Engram palette and semantic status colors.
+- Image quality and asset fidelity: the enhancement is a functional, GPU-rendered audio visualization requested for the waveform—not a substitute for a supplied image asset. The existing WaveSurfer waveform remains visible and sharp; no placeholder images, custom SVGs, CSS drawings, gradients, emoji, or unrelated decorative assets were introduced.
+- Copy and content: no production copy changes. The QA fixture contains purpose-written sample transcript content only and is removed before handoff.
+- Interaction and affordance: playback, pause, seek controls, speed, search, chapters, and segment seeking retain their existing DOM and behavior. The shader canvas is `aria-hidden` and `pointer-events: none`.
+- Motion and performance: animation runs only during playback, stops while paused, caps rendering density at 1.5×, stops while the document is hidden, and freezes to a static frame for `prefers-reduced-motion`. Two screenshots taken 450 ms apart while paused were byte-identical.
+- Progressive enhancement: WebGL2 initialization and shader compilation return without affecting WaveSurfer when unavailable. If decoded waveform data is unavailable, energy remains at zero while the procedural playhead treatment continues without interrupting playback.
+- Responsiveness: the 390 px player retains a 122 px waveform slot, all controls remain within the viewport, and `scrollWidth === innerWidth === 390`.
+- Browser diagnostics: no console errors or warnings appeared during light, dark, desktop, mobile, play, or pause checks.
 
-## Comparison Pass
+## Comparison History
 
-### Pass 1 — adjustments made
+### Pass 1 — blocked
 
-- The first fixture used a zero-duration audio data URI and surfaced an “Audio unavailable” error that was unrelated to the production experience.
-  - Fix: replaced it with a valid silent WAV fixture so the real player component could be inspected without a false error state.
-- Speaker fixtures initially rendered their raw labels through the real transcript naming logic.
-  - Fix: supplied the same speaker map used by production, validating the intended Jeremy/Alex display state.
+- [P2] The shader rendered underneath WaveSurfer and was visually lost at normal page scale.
+  - Fix: moved the transparent WebGL layer above the waveform while retaining pointer transparency, and increased the graphite field’s restrained alpha range.
+- [P2] The broad playhead glow lacked a precise signature detail.
+  - Fix: added a narrow procedural filament at the playhead, keeping the waveform bars as the sharpest element.
 
 ### Pass 2 — passed
 
-- Re-captured the 1487 × 1058 desktop state.
-- Compared source direction and implementation together in one 1920 × 1080 browser view.
-- Verified the 390 × 844 mobile layout has no horizontal overflow.
-- Verified transcript filtering and native disclosure behavior.
+- Re-captured the 1487 × 1058 light playback state after compositing fixes.
+- Compared the existing player and Graphite Pulse together in full-view and focused waveform views.
+- Verified dark mode, the 390 × 844 mobile layout, active playback, pause stability, and browser diagnostics.
 
 ## Follow-up Polish
 
-- [P3] The silent QA fixture shows a flat waveform. Production retains the real recording waveform and audio behavior; this is a fixture-only limitation.
-- [P3] The selected visual includes tags and people, which are not present in Engram's current data model and remain intentionally omitted.
+- [P3] The automated browser cannot emulate `prefers-reduced-motion` or force a WebGL context failure. Both paths were code-reviewed, remain non-blocking, and preserve the normal WaveSurfer layer by construction.
+- [P3] Real recordings will produce richer waveform-energy variation than the short synthetic QA tone; production feel should be checked once on a conversational recording before merging.
 
 ## Implementation Checklist
 
-- [x] Two-column content layout after the navigation rail.
-- [x] Centered, max-width recording notes workspace.
-- [x] Dedicated transcript workspace on the right.
-- [x] Refined overview and grouped disclosure surface.
-- [x] Consolidated playback, search, and chapter controls.
-- [x] Improved transcript reading and active states.
+- [x] Isolated WebGL2 Graphite Pulse canvas.
+- [x] Decoded-waveform energy response.
+- [x] Procedural playhead pulse and filament.
+- [x] Light and dark theme treatment.
+- [x] Reduced-motion and visibility handling.
+- [x] WebGL and decoded-waveform fallback behavior.
 - [x] Desktop and mobile responsive verification.
-- [x] Interaction and browser-diagnostic verification.
+- [x] Playback, pause, and console verification.
 
 final result: passed

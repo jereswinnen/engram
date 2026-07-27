@@ -15,6 +15,7 @@ import {
 import { activeSegmentIndex } from "@/lib/transcript/active-segment"
 import { firstMatchingSegmentIndex } from "@/lib/search/match"
 import { nameForLabel } from "@/lib/transcript/speaker-names"
+import { WaveformShader } from "./waveform-shader"
 
 type Segment = {
   start: number
@@ -27,6 +28,26 @@ function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60)
   const s = Math.floor(seconds % 60)
   return `${m}:${s.toString().padStart(2, "0")}`
+}
+
+function waveformEnergyAtTime(buffer: AudioBuffer | null, seconds: number) {
+  if (!buffer || buffer.duration <= 0 || buffer.length === 0) return 0
+
+  const channel = buffer.getChannelData(0)
+  const center = Math.floor((seconds / buffer.duration) * channel.length)
+  const radius = Math.max(32, Math.floor(buffer.sampleRate * 0.018))
+  const stride = Math.max(1, Math.floor(radius / 72))
+  const start = Math.max(0, center - radius)
+  const end = Math.min(channel.length, center + radius)
+  let total = 0
+  let count = 0
+
+  for (let index = start; index < end; index += stride) {
+    total += channel[index] * channel[index]
+    count += 1
+  }
+
+  return count > 0 ? Math.min(1, Math.sqrt(total / count) * 3.6) : 0
 }
 
 type Chapter = { title: string; gist: string; startSeconds?: number | null }
@@ -60,6 +81,7 @@ export function TranscriptPlayer({
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [waveformEnergy, setWaveformEnergy] = useState(0)
   const [playbackRate, setPlaybackRate] = useState(1)
   const [transcriptSearch, setTranscriptSearch] = useState("")
   const [active, setActive] = useState(-1)
@@ -114,6 +136,7 @@ export function TranscriptPlayer({
     const onTime = (t: number) => {
       setCurrentTime(t)
       setActive(activeSegmentIndex(segmentsRef.current, t))
+      setWaveformEnergy(waveformEnergyAtTime(ws.getDecodedData(), t))
     }
     ws.on("timeupdate", onTime)
     ws.on("ready", () => {
@@ -244,7 +267,15 @@ export function TranscriptPlayer({
           <RiForward15Line className="size-4" />
         </button>
 
-        <div className="mx-1 min-w-16 flex-1" ref={containerRef} />
+        <div className="relative mx-1 h-9 min-w-16 flex-1 overflow-hidden rounded-lg">
+          <WaveformShader
+            progress={duration > 0 ? currentTime / duration : 0}
+            energy={waveformEnergy}
+            playing={playing}
+            dark={resolvedTheme === "dark"}
+          />
+          <div className="relative z-10 h-full" ref={containerRef} />
+        </div>
         <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
           {formatTime(currentTime)} / {formatTime(duration)}
         </span>

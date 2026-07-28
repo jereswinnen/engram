@@ -41,4 +41,22 @@ func recordingBindingIsolation() {
 
   #expect(original.serverURL == URL(string: "https://first.example"))
   #expect(!original.matches(otherConnection))
+  #expect(
+    recordingMetadataRefreshAllowed(
+      storedBinding: original,
+      currentBinding: original
+    )
+  )
+  #expect(
+    !recordingMetadataRefreshAllowed(
+      storedBinding: otherConnection,
+      currentBinding: original
+    )
+  )
+  #expect(
+    recordingMetadataRefreshAllowed(
+      storedBinding: nil,
+      currentBinding: original
+    )
+  )
 }

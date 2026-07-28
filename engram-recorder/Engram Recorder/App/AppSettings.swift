@@ -30,8 +30,11 @@ final class AppSettings {
   }
 
   var meetingDetectionModeChanged: ((MeetingDetectionMode) -> Void)?
+  var authenticationChanged: ((RecordingAuthBinding?) -> Void)?
 
-  private(set) var authAccount: EngramAccount?
+  private(set) var authAccount: EngramAccount? {
+    didSet { authenticationChanged?(currentBinding) }
+  }
   private(set) var authenticationError: String?
   private(set) var isAuthenticating = false
   private(set) var revocationFailed = false

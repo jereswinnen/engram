@@ -3,6 +3,7 @@ import { db } from "@/db"
 import { recordings } from "@/db/schema"
 import { isAuthFailure, requirePrincipal } from "@/lib/auth/policy"
 import {
+  canReadRecordingMetadata,
   getOwnedRecording,
   ownedRecordingWhere,
   recordingBelongsToConnection,
@@ -21,7 +22,7 @@ export async function GET(
 
   const { id } = await params
   const recording = await getOwnedRecording(principal.userId, id)
-  if (!recording || !recordingBelongsToConnection(recording, principal)) {
+  if (!recording || !canReadRecordingMetadata(recording, principal)) {
     return NextResponse.json({ error: "Recording not found" }, { status: 404 })
   }
 

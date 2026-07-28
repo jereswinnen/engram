@@ -37,24 +37,24 @@ struct MenuBarView: View {
 
       HStack {
         SettingsLink {
-          Label("Settings", systemImage: "gearshape")
+          Image(systemName: "gearshape")
+            .frame(width: 28, height: 24)
         }
         .buttonStyle(.plain)
-
-        Spacer()
-
-        Label("⌘⇧R", systemImage: "keyboard")
-          .font(.caption)
-          .foregroundStyle(.secondary)
+        .accessibilityLabel("Settings")
+        .help("Settings")
 
         Spacer()
 
         Button {
           controller.quitApplication()
         } label: {
-          Label("Quit", systemImage: "power")
+          Image(systemName: "power")
+            .frame(width: 28, height: 24)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Quit Engram Recorder")
+        .help("Quit Engram Recorder")
       }
       .font(.callout)
       .padding(.horizontal, 16)
@@ -137,85 +137,87 @@ private struct RecordingRow: View {
         Text(recording.title)
           .font(.body.weight(.medium))
           .lineLimit(1)
+          .truncationMode(.tail)
 
         Text(detailText)
           .font(.caption)
           .foregroundStyle(.secondary)
           .lineLimit(1)
       }
-      .layoutPriority(1)
+      .frame(maxWidth: .infinity, alignment: .leading)
 
-      Spacer(minLength: 6)
-
-      if controller.isDeleting(recording.id) {
-        ProgressView()
-          .controlSize(.small)
-      } else if recording.uploadState == .failed || recording.uploadState == .local {
-        Button {
-          controller.retryUpload(recording.id)
-        } label: {
-          Label("Retry", systemImage: "arrow.clockwise")
-        }
-        .buttonStyle(.borderless)
-        .controlSize(.small)
-      } else if recording.uploadState == .uploaded {
-        Button {
-          controller.openInEngram(recording)
-        } label: {
-          Label("Open", systemImage: "arrow.up.right.square")
-        }
-        .buttonStyle(.borderless)
-        .controlSize(.small)
-      } else {
-        ProgressView()
-          .controlSize(.small)
-      }
-
-      Menu {
-        Button {
-          controller.revealLocalFile(recording)
-        } label: {
-          Label("Show in Finder", systemImage: "folder")
-        }
-
-        if let error = recording.lastError {
-          Divider()
-          Text(error)
-        }
-
-        Divider()
-
-        if recording.uploadState == .uploaded {
-          Button(role: .destructive) {
-            confirmLocalDeletion()
+      HStack(spacing: 8) {
+        if controller.isDeleting(recording.id) {
+          ProgressView()
+            .controlSize(.small)
+        } else if recording.uploadState == .failed || recording.uploadState == .local {
+          Button {
+            controller.retryUpload(recording.id)
           } label: {
-            Label("Delete Local Copy…", systemImage: "trash")
+            Label("Retry", systemImage: "arrow.clockwise")
+          }
+          .buttonStyle(.borderless)
+          .controlSize(.small)
+        } else if recording.uploadState == .uploaded {
+          Button {
+            controller.openInEngram(recording)
+          } label: {
+            Label("Open", systemImage: "arrow.up.right.square")
+          }
+          .buttonStyle(.borderless)
+          .controlSize(.small)
+        } else {
+          ProgressView()
+            .controlSize(.small)
+        }
+
+        Menu {
+          Button {
+            controller.revealLocalFile(recording)
+          } label: {
+            Label("Show in Finder", systemImage: "folder")
           }
 
-          if recording.remoteID != nil {
+          if let error = recording.lastError {
+            Divider()
+            Text(error)
+          }
+
+          Divider()
+
+          if recording.uploadState == .uploaded {
             Button(role: .destructive) {
-              confirmEverywhereDeletion()
+              confirmLocalDeletion()
             } label: {
-              Label("Delete Everywhere…", systemImage: "trash.slash")
+              Label("Delete Local Copy…", systemImage: "trash")
+            }
+
+            if recording.remoteID != nil {
+              Button(role: .destructive) {
+                confirmEverywhereDeletion()
+              } label: {
+                Label("Delete Everywhere…", systemImage: "trash.slash")
+              }
+            }
+          } else {
+            Button(role: .destructive) {
+              confirmLocalDeletion()
+            } label: {
+              Label("Delete Recording…", systemImage: "trash")
             }
           }
-        } else {
-          Button(role: .destructive) {
-            confirmLocalDeletion()
-          } label: {
-            Label("Delete Recording…", systemImage: "trash")
-          }
+        } label: {
+          Image(systemName: "ellipsis.circle")
+            .font(.system(size: 15))
+            .foregroundStyle(.secondary)
         }
-      } label: {
-        Image(systemName: "ellipsis.circle")
-          .font(.system(size: 15))
-          .foregroundStyle(.secondary)
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("More actions")
+        .disabled(controller.isDeleting(recording.id))
       }
-      .menuStyle(.borderlessButton)
-      .menuIndicator(.hidden)
-      .fixedSize()
-      .help("More actions")
-      .disabled(controller.isDeleting(recording.id))
+      .fixedSize(horizontal: true, vertical: false)
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 10)

@@ -62,6 +62,13 @@ public struct RecordingAuthBinding: Codable, Equatable, Sendable {
   }
 }
 
+public func recordingMetadataRefreshAllowed(
+  storedBinding: RecordingAuthBinding?,
+  currentBinding: RecordingAuthBinding
+) -> Bool {
+  storedBinding == nil || storedBinding?.matches(currentBinding) == true
+}
+
 public struct UploadResult: Decodable, Sendable {
   public let id: String
   public let url: String

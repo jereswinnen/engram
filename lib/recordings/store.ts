@@ -47,6 +47,27 @@ export function recordingBelongsToConnection(
   )
 }
 
+export function canReadRecordingMetadata(
+  recording: {
+    ownerId: string | null
+    createdByConnectionId: string | null
+    source: string
+  },
+  principal: AuthPrincipal
+): boolean {
+  if (recordingBelongsToConnection(recording, principal)) return true
+
+  // Title/status synchronization is read-only and limited to Mac recordings
+  // already owned by the authenticated account. This lets the OAuth app
+  // refresh locally known recordings created by the retired legacy connection
+  // without granting that connection delete or mutation rights.
+  return (
+    principal.mechanism === "oauth" &&
+    recording.ownerId === principal.userId &&
+    recording.source === "mac"
+  )
+}
+
 export async function getOwnedRecordingBundle(
   ownerId: string,
   recordingId: string

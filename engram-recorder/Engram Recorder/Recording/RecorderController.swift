@@ -47,6 +47,14 @@ final class RecorderController {
     settings.meetingDetectionModeChanged = { [weak self] mode in
       self?.configureMeetingDetection(for: mode)
     }
+    settings.authenticationChanged = { [weak self] binding in
+      guard let self else { return }
+      if binding == nil {
+        self.cancelMetadataRefreshes()
+      } else {
+        self.refreshUploadedRecordingMetadata()
+      }
+    }
     configureMeetingDetection(for: settings.meetingDetectionMode)
     Task { [weak self] in
       guard let self else { return }
@@ -443,11 +451,7 @@ final class RecorderController {
       }
       if changed { await persistHistory() }
       await deleteExpiredLocalRecordings(now: migrationDate)
-      for recording in recordings
-      where recording.uploadState == .uploaded && recording.remoteID != nil
-      {
-        startMetadataRefresh(recordingID: recording.id, maxAttempts: 1)
-      }
+      refreshUploadedRecordingMetadata()
     } catch {
       showFailure("Could not load recording history")
     }
@@ -469,6 +473,21 @@ final class RecorderController {
     }
   }
 
+  private func refreshUploadedRecordingMetadata(maxAttempts: Int = 3) {
+    guard settings.currentBinding != nil else { return }
+    for recording in recordings where recording.uploadState == .uploaded {
+      guard recording.remoteID != nil else { continue }
+      startMetadataRefresh(recordingID: recording.id, maxAttempts: maxAttempts)
+    }
+  }
+
+  private func cancelMetadataRefreshes() {
+    for task in metadataTasks.values {
+      task.cancel()
+    }
+    metadataTasks.removeAll()
+  }
+
   private func refreshRemoteMetadata(
     recordingID: UUID,
     maxAttempts: Int
@@ -478,7 +497,11 @@ final class RecorderController {
         let index = recordings.firstIndex(where: { $0.id == recordingID }),
         let remoteID = recordings[index].remoteID,
         let serverURL = recordings[index].authBinding?.serverURL ?? settings.serverURL,
-        recordings[index].authBinding?.matches(settings.currentBinding) == true
+        let currentBinding = settings.currentBinding,
+        recordingMetadataRefreshAllowed(
+          storedBinding: recordings[index].authBinding,
+          currentBinding: currentBinding
+        )
       else { return }
 
       do {
@@ -486,8 +509,13 @@ final class RecorderController {
           remoteID: remoteID,
           serverURL: serverURL
         )
-        if metadata.titleOrigin == "generated", recordings[index].title != metadata.title {
-          recordings[index].title = metadata.title
+        guard let updatedIndex = recordings.firstIndex(where: { $0.id == recordingID }) else {
+          return
+        }
+        if metadata.titleOrigin == "generated",
+          recordings[updatedIndex].title != metadata.title
+        {
+          recordings[updatedIndex].title = metadata.title
           await persistHistory()
         }
         if metadata.status == "done" || metadata.status == "error" { return }

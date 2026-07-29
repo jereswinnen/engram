@@ -32,7 +32,7 @@ async function setStatus(
 export async function runTranscription(
   ownerId: string,
   id: string
-): Promise<void> {
+): Promise<boolean> {
   try {
     const rec = await getOwnedRecording(ownerId, id)
     if (!rec) throw new Error(`recording ${id} not found`)
@@ -56,6 +56,7 @@ export async function runTranscription(
       segments: correctedSegments,
     })
     await setStatus(ownerId, id, "transcribed")
+    return true
   } catch (e) {
     try {
       await setStatus(
@@ -67,6 +68,7 @@ export async function runTranscription(
     } catch {
       // DB unavailable while recording error status — nothing further we can do
     }
+    return false
   }
 }
 

@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
-const updates: any[] = []
+const updates: Record<string, unknown>[] = []
 let glossaryFails = false
 
 vi.mock("@/db", () => ({
   db: {
     update: () => ({
-      set: (v: any) => ({
+      set: (v: Record<string, unknown>) => ({
         where: async () => {
           updates.push(v)
         },
@@ -71,7 +71,8 @@ beforeEach(() => {
 describe("runTranscription", () => {
   it("sets transcribing then transcribed", async () => {
     const { runTranscription } = await import("./pipeline")
-    await runTranscription("user-a", "r1")
+    const succeeded = await runTranscription("user-a", "r1")
+    expect(succeeded).toBe(true)
     expect(updates.map((u) => u.status)).toEqual([
       "transcribing",
       "transcribed",
@@ -80,18 +81,20 @@ describe("runTranscription", () => {
 
   it("sets error when the adapter throws", async () => {
     const scribe = await import("@/lib/transcription/scribe")
-    ;(scribe.transcribeWithScribe as any).mockRejectedValueOnce(
+    vi.mocked(scribe.transcribeWithScribe).mockRejectedValueOnce(
       new Error("boom")
     )
     const { runTranscription } = await import("./pipeline")
-    await runTranscription("user-a", "r1")
-    expect(updates.at(-1).status).toBe("error")
+    const succeeded = await runTranscription("user-a", "r1")
+    expect(succeeded).toBe(false)
+    expect(updates.at(-1)?.status).toBe("error")
   })
 
   it("degrades gracefully when glossary DB fails (still reaches transcribed)", async () => {
     glossaryFails = true
     const { runTranscription } = await import("./pipeline")
-    await runTranscription("user-a", "r1")
+    const succeeded = await runTranscription("user-a", "r1")
+    expect(succeeded).toBe(true)
     expect(updates.map((u) => u.status)).toEqual([
       "transcribing",
       "transcribed",
@@ -108,11 +111,11 @@ describe("runEnhancement", () => {
 
   it("sets error when enhanceTranscript rejects", async () => {
     const enhance = await import("@/lib/ai/enhance")
-    ;(enhance.enhanceTranscript as any).mockRejectedValueOnce(
+    vi.mocked(enhance.enhanceTranscript).mockRejectedValueOnce(
       new Error("llm down")
     )
     const { runEnhancement } = await import("./pipeline")
     await runEnhancement("user-a", "r1")
-    expect(updates.at(-1).status).toBe("error")
+    expect(updates.at(-1)?.status).toBe("error")
   })
 })

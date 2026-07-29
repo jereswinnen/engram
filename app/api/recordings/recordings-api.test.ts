@@ -45,7 +45,7 @@ vi.mock("@/lib/storage", () => ({
 }))
 
 vi.mock("@/lib/pipeline", () => ({
-  runTranscription: vi.fn(async () => {}),
+  runTranscription: vi.fn(async () => true),
   runEnhancement: vi.fn(async () => {}),
 }))
 
@@ -152,7 +152,9 @@ describe("POST /api/recordings", () => {
     } as never)
     const { POST } = await import("./route")
 
-    const response = await POST(uploadRequest({ title: "My project update" }) as never)
+    const response = await POST(
+      uploadRequest({ title: "My project update" }) as never
+    )
 
     expect(response.status).toBe(201)
     expect(calls.inserts[0]).toMatchObject({

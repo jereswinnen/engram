@@ -138,7 +138,9 @@ export async function POST(req: NextRequest) {
 
   // fire-and-forget the pipeline (Phase 0: route stays warm long enough on Railway)
   runTranscription(principal.userId, rec.id)
-    .then(() => runEnhancement(principal.userId, rec.id))
+    .then((transcribed) =>
+      transcribed ? runEnhancement(principal.userId, rec.id) : undefined
+    )
     .catch(() => {})
 
   return NextResponse.json(

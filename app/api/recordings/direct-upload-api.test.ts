@@ -110,7 +110,7 @@ beforeEach(() => {
   state.updates.length = 0
   state.head.mockResolvedValue(null)
   state.presignedPutUrl.mockResolvedValue("https://r2.example/upload")
-  state.runTranscription.mockResolvedValue(undefined)
+  state.runTranscription.mockResolvedValue(true)
   state.runEnhancement.mockResolvedValue(undefined)
   process.env.MAC_RECORDER_API_TOKEN = "recorder-secret"
   process.env.LEGACY_MAC_RECORDER_OWNER_ID = "user-1"
@@ -265,6 +265,19 @@ describe("POST /api/recordings/[id]/complete", () => {
     await vi.waitFor(() =>
       expect(state.runEnhancement).toHaveBeenCalledWith("user-1", recordingID)
     )
+  })
+
+  it("does not start enhancement when transcription fails", async () => {
+    state.runTranscription.mockResolvedValueOnce(false)
+    const { request, context } = completeRequest()
+
+    const response = await completeUpload(request, context)
+
+    expect(response.status).toBe(200)
+    await vi.waitFor(() =>
+      expect(state.runTranscription).toHaveBeenCalledWith("user-1", recordingID)
+    )
+    expect(state.runEnhancement).not.toHaveBeenCalled()
   })
 
   it("rejects an incomplete object without starting processing", async () => {

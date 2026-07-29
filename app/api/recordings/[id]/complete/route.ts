@@ -92,7 +92,9 @@ export async function POST(request: Request, context: RouteContext) {
 
   if (transitioned.length > 0) {
     runTranscription(principal.userId, recording.id)
-      .then(() => runEnhancement(principal.userId, recording.id))
+      .then((transcribed) =>
+        transcribed ? runEnhancement(principal.userId, recording.id) : undefined
+      )
       .catch(() => {})
   }
 

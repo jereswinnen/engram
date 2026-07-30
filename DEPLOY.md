@@ -238,6 +238,99 @@ secret rotation needs a separate, tested maintenance procedure that preserves or
 re-encrypts existing key material; weekly JWK rotation requires no environment-
 secret change.
 
+### Authenticated Engram MCP server
+
+The Engram MCP server is a read-only remote knowledge source at `${BETTER_AUTH_URL}/mcp`.
+It searches source transcripts and the latest generated meeting notes. It never
+exposes audio or storage credentials and cannot upload, edit, regenerate, or delete.
+
+Migrations `0016_special_blue_shield.sql` and `0017_gray_adam_destine.sql` are
+additive:
+
+- `0016` backfills and indexes generated-note search text;
+- `0017` creates durable fixed-window MCP rate-limit buckets.
+
+The existing Railway `preDeployCommand` applies both before the new application
+starts. The OpenAI key remains a Railway service variable; do not copy it into a
+local MCP or host configuration. Transcript semantic search uses that hosted key,
+while generated-note search uses Postgres full-text search.
+
+#### Dark deployment
+
+1. Deploy the code and migrations with `MCP_ENABLED=false`.
+2. Keep the existing OAuth service state unchanged. MCP disablement must not disable
+   OAuth or affect the Mac client.
+3. Confirm both endpoints remain hidden:
+
+   ```bash
+   curl -i https://<host>/mcp
+   curl -i https://<host>/.well-known/oauth-protected-resource/mcp
+   ```
+
+   Both must return `404` while the MCP flag is false.
+
+#### Staging or dogfood enablement
+
+Use a disposable/staging database or an explicitly approved production dogfood
+window. Set:
+
+```text
+AUTH_OAUTH_BEARER_ENABLED=true
+MCP_ENABLED=true
+```
+
+Then verify protected-resource metadata before connecting a host:
+
+```bash
+curl -sS https://<host>/.well-known/oauth-protected-resource/mcp
+```
+
+It must advertise resource `https://<host>/mcp`, authorization server
+`https://<host>/api/auth`, scopes `transcripts:search`, `transcripts:read`, and
+`offline_access`, and bearer method `header` only.
+
+Configure Codex:
+
+```bash
+codex mcp add engram \
+  --url https://<host>/mcp \
+  --oauth-resource https://<host>/mcp
+codex mcp login engram \
+  --scopes transcripts:search,transcripts:read,offline_access
+```
+
+Configure Claude Code against the same endpoint:
+
+```bash
+claude mcp add --transport http --scope user engram https://<host>/mcp
+claude mcp login engram
+```
+
+For each host, verify:
+
+1. browser OAuth and consent complete without a pasted token;
+2. search can return both transcript and clearly marked generated-note evidence;
+3. fetch and transcript pagination return timestamped source segments;
+4. the client still works after restart and token refresh;
+5. revoking its Engram connection blocks the next call;
+6. reauthorization creates a new active connection and restores access.
+
+Search is limited to 20 calls per user/client/minute. Each read tool is limited to
+60 calls per user/client/minute. Tool logs contain hashed identities and bounded
+metrics only; they must never contain queries, transcript text, summaries, speaker
+names, OAuth codes, or tokens.
+
+#### Production gate and rollback
+
+Production enablement remains blocked until the legacy-auth observation gate closes
+(currently 2026-08-24) or is explicitly revised, automated verification is green,
+and both Codex and Claude Code pass login, refresh, revoke, and reauthorize against
+the hosted endpoint.
+
+Rollback is one Railway variable change: set `MCP_ENABLED=false` and redeploy. Leave
+OAuth enabled for existing clients and leave the additive search/rate-limit tables
+in place.
+
 ---
 
 ## 6. Trigger first deploy + confirm

@@ -26,6 +26,33 @@
 
 **✅ PHASE 0 COMPLETE.** Next milestone: Phase 1 — Plaud MCP sync (see roadmap below).
 
+## Authenticated Engram MCP server
+
+**Implementation status:** COMPLETE, dark deployment and hosted acceptance pending.
+
+- [x] OAuth bearer-only `/mcp` boundary with exact MCP audience, active-connection
+      enforcement, protected-resource metadata, and feature flag.
+- [x] Four read-only tools: `search`, `fetch`, `get_transcript_page`, and
+      `get_summary`.
+- [x] Search fusion across source transcript passages and the latest generated
+      overview, key points, decisions, actions, chapters, and open questions with
+      explicit provenance.
+- [x] Owner-scoped transcript/summary reads, speaker resolution, opaque cursor
+      validation, stale-cursor handling, and 48 KB response bounds.
+- [x] Durable Postgres per-user/client/tool limits, execution timeouts, streamed
+      request-size enforcement, and private-safe structured logs.
+- [x] Automated protocol, auth, ownership, cursor, provenance, limit, and logging
+      verification.
+- [ ] Deploy migrations 0016/0017 to Railway with `MCP_ENABLED=false` and confirm
+      the dark endpoints remain `404`.
+- [ ] Complete hosted OAuth login, refresh, revoke, and reauthorize in Codex and
+      Claude Code.
+- [ ] Enable production only after the legacy-auth observation gate closes
+      (currently 2026-08-24) or is explicitly revised.
+
+Design: [Authenticated Remote MCP Server](docs/superpowers/specs/2026-07-30-engram-remote-mcp-design.md).
+Runbook: [DEPLOY.md — Authenticated Engram MCP server](DEPLOY.md#authenticated-engram-mcp-server).
+
 ## Remaining Roadmap (post Phase 0)
 
 > Phase 0 code is complete and merged to `main`. Plaud automatic polling has since been

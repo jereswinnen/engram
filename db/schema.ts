@@ -397,30 +397,44 @@ export const transcriptEmbeddings = pgTable(
   ]
 )
 
-export const aiEnhancements = pgTable("ai_enhancements", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  recordingId: uuid("recording_id")
-    .notNull()
-    .references(() => recordings.id, { onDelete: "cascade" }),
-  kind: text("kind").notNull().default("summary"),
-  title: text("title"),
-  overview: text("overview").notNull(),
-  keyPoints: jsonb("key_points").notNull().$type<string[]>(),
-  decisions: jsonb("decisions").notNull().$type<string[]>().default([]),
-  actionItems: jsonb("action_items")
-    .notNull()
-    .$type<{ text: string; owner?: string | null; due?: string | null }[]>(),
-  chapters: jsonb("chapters")
-    .notNull()
-    .$type<{ title: string; gist: string; startSeconds?: number | null }[]>()
-    .default([]),
-  openQuestions: jsonb("open_questions")
-    .notNull()
-    .$type<string[]>()
-    .default([]),
-  model: text("model").notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-})
+export const aiEnhancements = pgTable(
+  "ai_enhancements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    recordingId: uuid("recording_id")
+      .notNull()
+      .references(() => recordings.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull().default("summary"),
+    title: text("title"),
+    overview: text("overview").notNull(),
+    keyPoints: jsonb("key_points").notNull().$type<string[]>(),
+    decisions: jsonb("decisions").notNull().$type<string[]>().default([]),
+    actionItems: jsonb("action_items")
+      .notNull()
+      .$type<{ text: string; owner?: string | null; due?: string | null }[]>(),
+    chapters: jsonb("chapters")
+      .notNull()
+      .$type<{ title: string; gist: string; startSeconds?: number | null }[]>()
+      .default([]),
+    openQuestions: jsonb("open_questions")
+      .notNull()
+      .$type<string[]>()
+      .default([]),
+    searchText: text("search_text").notNull().default(""),
+    searchVector: tsvector("search_vector").generatedAlwaysAs(
+      sql`to_tsvector('simple', coalesce(search_text, ''))`
+    ),
+    model: text("model").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("ai_enhancements_recording_created_idx").on(
+      t.recordingId,
+      t.createdAt
+    ),
+    index("ai_enhancements_search_idx").using("gin", t.searchVector),
+  ]
+)
 
 export const apiCredentials = pgTable(
   "api_credentials",

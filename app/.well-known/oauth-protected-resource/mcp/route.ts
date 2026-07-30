@@ -4,9 +4,11 @@ import {
   oauthEnabled,
   oauthUnavailableResponse,
 } from "@/lib/auth/oauth-feature"
-import { oauthUrls } from "@/lib/auth/oauth-config"
+import { ENGRAM_MCP_SCOPES, oauthUrls } from "@/lib/auth/oauth-config"
+import { mcpEnabled, mcpUnavailableResponse } from "@/lib/mcp/feature"
 
 export async function GET(): Promise<Response> {
+  if (!mcpEnabled()) return mcpUnavailableResponse()
   if (!oauthEnabled()) return oauthUnavailableResponse()
   const appUrl = process.env.BETTER_AUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL
   if (!appUrl) return Response.json({ error: "misconfigured" }, { status: 500 })
@@ -16,7 +18,7 @@ export async function GET(): Promise<Response> {
     .getProtectedResourceMetadata({
       resource: urls.mcpResource,
       authorization_servers: [urls.issuer],
-      scopes_supported: ["transcripts:search", "transcripts:read"],
+      scopes_supported: [...ENGRAM_MCP_SCOPES],
       bearer_methods_supported: ["header"],
     })
   return Response.json(metadata, {

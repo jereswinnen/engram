@@ -397,30 +397,61 @@ export const transcriptEmbeddings = pgTable(
   ]
 )
 
-export const aiEnhancements = pgTable("ai_enhancements", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  recordingId: uuid("recording_id")
-    .notNull()
-    .references(() => recordings.id, { onDelete: "cascade" }),
-  kind: text("kind").notNull().default("summary"),
-  title: text("title"),
-  overview: text("overview").notNull(),
-  keyPoints: jsonb("key_points").notNull().$type<string[]>(),
-  decisions: jsonb("decisions").notNull().$type<string[]>().default([]),
-  actionItems: jsonb("action_items")
-    .notNull()
-    .$type<{ text: string; owner?: string | null; due?: string | null }[]>(),
-  chapters: jsonb("chapters")
-    .notNull()
-    .$type<{ title: string; gist: string; startSeconds?: number | null }[]>()
-    .default([]),
-  openQuestions: jsonb("open_questions")
-    .notNull()
-    .$type<string[]>()
-    .default([]),
-  model: text("model").notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-})
+export const mcpRateLimitBuckets = pgTable(
+  "mcp_rate_limit_buckets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    keyDigest: text("key_digest").notNull(),
+    windowStart: timestamp("window_start").notNull(),
+    requestCount: integer("request_count").notNull().default(1),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("mcp_rate_limit_bucket_unique").on(t.keyDigest, t.windowStart),
+    index("mcp_rate_limit_expires_at_idx").on(t.expiresAt),
+    check("mcp_rate_limit_request_count_check", sql`${t.requestCount} > 0`),
+  ]
+)
+
+export const aiEnhancements = pgTable(
+  "ai_enhancements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    recordingId: uuid("recording_id")
+      .notNull()
+      .references(() => recordings.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull().default("summary"),
+    title: text("title"),
+    overview: text("overview").notNull(),
+    keyPoints: jsonb("key_points").notNull().$type<string[]>(),
+    decisions: jsonb("decisions").notNull().$type<string[]>().default([]),
+    actionItems: jsonb("action_items")
+      .notNull()
+      .$type<{ text: string; owner?: string | null; due?: string | null }[]>(),
+    chapters: jsonb("chapters")
+      .notNull()
+      .$type<{ title: string; gist: string; startSeconds?: number | null }[]>()
+      .default([]),
+    openQuestions: jsonb("open_questions")
+      .notNull()
+      .$type<string[]>()
+      .default([]),
+    searchText: text("search_text").notNull().default(""),
+    searchVector: tsvector("search_vector").generatedAlwaysAs(
+      sql`to_tsvector('simple', coalesce(search_text, ''))`
+    ),
+    model: text("model").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("ai_enhancements_recording_created_idx").on(
+      t.recordingId,
+      t.createdAt
+    ),
+    index("ai_enhancements_search_idx").using("gin", t.searchVector),
+  ]
+)
 
 export const apiCredentials = pgTable(
   "api_credentials",

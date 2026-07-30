@@ -1,6 +1,6 @@
 // Control-char sentinels: never appear in transcript text, not HTML-special.
-export const SNIPPET_START = "";
-export const SNIPPET_END = "";
+export const SNIPPET_START = ""
+export const SNIPPET_END = ""
 
 function escapeHtml(s: string): string {
   return s
@@ -8,10 +8,19 @@ function escapeHtml(s: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+    .replace(/'/g, "&#39;")
 }
 
 /** Escape the raw ts_headline output, then turn sentinels into <mark>. */
 export function renderSnippet(raw: string): string {
-  return escapeHtml(raw).split(SNIPPET_START).join("<mark>").split(SNIPPET_END).join("</mark>");
+  return escapeHtml(raw)
+    .split(SNIPPET_START)
+    .join("<mark>")
+    .split(SNIPPET_END)
+    .join("</mark>")
+}
+
+/** Remove ts_headline sentinels for clients that consume plain text. */
+export function renderPlainSnippet(raw: string): string {
+  return raw.split(SNIPPET_START).join("").split(SNIPPET_END).join("")
 }

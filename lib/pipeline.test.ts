@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const updates: Record<string, unknown>[] = []
+const inserts: Record<string, unknown>[] = []
 let glossaryFails = false
 
 vi.mock("@/db", () => ({
@@ -30,7 +31,11 @@ vi.mock("@/db", () => ({
         },
       },
     },
-    insert: () => ({ values: async () => {} }),
+    insert: () => ({
+      values: async (value: Record<string, unknown>) => {
+        inserts.push(value)
+      },
+    }),
     delete: () => ({ where: async () => {} }),
   },
 }))
@@ -65,6 +70,7 @@ vi.mock("@/lib/config", () => ({
 
 beforeEach(() => {
   updates.length = 0
+  inserts.length = 0
   glossaryFails = false
 })
 
@@ -107,6 +113,7 @@ describe("runEnhancement", () => {
     const { runEnhancement } = await import("./pipeline")
     await runEnhancement("user-a", "r1")
     expect(updates.map((u) => u.status)).toEqual(["enhancing", "done"])
+    expect(inserts.at(-1)?.searchText).toBe("O")
   })
 
   it("sets error when enhanceTranscript rejects", async () => {

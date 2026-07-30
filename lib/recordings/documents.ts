@@ -48,6 +48,9 @@ export type OwnedSummaryDocument = {
 }
 
 export type TranscriptPage = {
+  transcriptionId: string
+  offset: number
+  totalSegmentCount: number
   recording: OwnedTranscriptDocument["recording"] & { language: string | null }
   segments: Array<{
     index: number
@@ -66,10 +69,7 @@ export type TranscriptPageResult =
 type RecordingBundle = Awaited<ReturnType<typeof getOwnedRecordingBundle>>
 
 type DocumentDependencies = {
-  getBundle?: (
-    ownerId: string,
-    recordingId: string
-  ) => Promise<RecordingBundle>
+  getBundle?: (ownerId: string, recordingId: string) => Promise<RecordingBundle>
   getSpeakerMap?: (
     ownerId: string,
     recordingId: string
@@ -171,6 +171,9 @@ export async function getOwnedTranscriptPage(
   return {
     ok: true,
     page: {
+      transcriptionId: document.transcription.id,
+      offset: cursor.offset,
+      totalSegmentCount: source.length,
       recording: {
         ...document.recording,
         language: document.transcription.language,

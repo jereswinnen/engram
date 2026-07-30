@@ -51,9 +51,15 @@ describe("MCP durable rate limiting", () => {
 
     const rendered = new PgDialect().sqlToQuery(
       execute.mock.calls[0][0] as SQL
-    ).sql
-    expect(rendered).toContain("ON CONFLICT (key_digest, window_start)")
-    expect(rendered).toContain("request_count + 1")
+    )
+    expect(rendered.sql).toContain("ON CONFLICT (key_digest, window_start)")
+    expect(rendered.sql).toContain("request_count + 1")
+    expect(rendered.sql).toContain("$2::timestamp")
+    expect(rendered.params).toEqual([
+      expect.any(String),
+      "2026-07-30T10:00:00.000Z",
+      "2026-07-30T10:05:00.000Z",
+    ])
     expect(result).toEqual({
       allowed: true,
       limit: 20,
@@ -83,7 +89,9 @@ describe("MCP durable rate limiting", () => {
     expect(result.retryAfterSeconds).toBe(1)
     const cleanup = new PgDialect().sqlToQuery(
       execute.mock.calls[1][0] as SQL
-    ).sql
-    expect(cleanup).toContain("DELETE FROM mcp_rate_limit_buckets")
+    )
+    expect(cleanup.sql).toContain("DELETE FROM mcp_rate_limit_buckets")
+    expect(cleanup.sql).toContain("$1::timestamp")
+    expect(cleanup.params).toEqual(["2026-07-30T10:00:59.500Z"])
   })
 })

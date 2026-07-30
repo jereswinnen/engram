@@ -64,7 +64,12 @@ export async function checkMcpRateLimit(
       request_count,
       expires_at
     )
-    VALUES (${keyDigest}, ${windowStart}, 1, ${expiresAt})
+    VALUES (
+      ${keyDigest},
+      ${windowStart.toISOString()}::timestamp,
+      1,
+      ${expiresAt.toISOString()}::timestamp
+    )
     ON CONFLICT (key_digest, window_start)
     DO UPDATE SET request_count = mcp_rate_limit_buckets.request_count + 1
     RETURNING request_count
@@ -75,7 +80,7 @@ export async function checkMcpRateLimit(
     try {
       await execute(sql`
         DELETE FROM mcp_rate_limit_buckets
-        WHERE expires_at < ${now}
+        WHERE expires_at < ${now.toISOString()}::timestamp
       `)
     } catch {
       // Cleanup is opportunistic and must not change the bucket decision.

@@ -54,7 +54,7 @@ export async function checkMcpRateLimit(
   const windowEnd = new Date(windowStart.getTime() + WINDOW_MILLISECONDS)
   const expiresAt = new Date(windowStart.getTime() + RETENTION_MILLISECONDS)
   const keyDigest = rateLimitKey(input)
-  const execute = dependencies.execute ?? db.execute
+  const execute = dependencies.execute ?? db.execute.bind(db)
   const limit = MCP_TOOL_RATE_LIMITS[input.tool]
 
   const rows = (await execute(sql`

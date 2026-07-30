@@ -11,6 +11,7 @@ vi.mock("@/lib/recordings/documents", () => ({
   getOwnedSummary: vi.fn(),
   encodeTranscriptCursor: vi.fn(() => "cursor"),
 }))
+vi.mock("@/db", () => ({ db: { execute: vi.fn() } }))
 
 import { MCP_MAX_REQUEST_BYTES } from "./limits"
 import { handleMcpHttpRequest } from "./transport"
@@ -64,6 +65,21 @@ describe("MCP HTTP transport", () => {
         authenticate: async () => PRINCIPAL,
       }
     )
+    expect(response.status).toBe(413)
+  })
+
+  it("enforces the request cap when Content-Length is absent", async () => {
+    const request = new Request("https://engram.example/mcp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "x".repeat(MCP_MAX_REQUEST_BYTES + 1),
+    })
+    expect(request.headers.get("content-length")).toBeNull()
+
+    const response = await handleMcpHttpRequest(request, {
+      env: { MCP_ENABLED: "true" },
+      authenticate: async () => PRINCIPAL,
+    })
     expect(response.status).toBe(413)
   })
 

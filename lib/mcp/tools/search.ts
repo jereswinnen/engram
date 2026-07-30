@@ -2,10 +2,11 @@ import { z } from "zod"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { searchEngramDocuments } from "@/lib/search/documents"
 import { isWithinToolLimit } from "../limits"
-import { requireToolScope, toolError } from "../errors"
+import { toolError } from "../errors"
 import {
   oauthSecurityScheme,
   READ_ONLY_ANNOTATIONS,
+  runMcpTool,
   textResult,
   type McpToolContext,
 } from "./shared"
@@ -31,31 +32,31 @@ export function registerSearchTool(
       annotations: READ_ONLY_ANNOTATIONS,
       _meta: oauthSecurityScheme("transcripts:search"),
     },
-    async ({ query }) => {
-      const scopeError = requireToolScope(
-        context.principal,
-        "transcripts:search",
-        context.appUrl
-      )
-      if (scopeError) return scopeError
-
-      try {
-        const output = await searchDocuments(context.principal.userId, query, {
-          appUrl: context.appUrl,
-        })
-        if (!isWithinToolLimit(output)) {
-          return toolError(
-            "response_too_large",
-            "The bounded search response exceeded the tool limit."
-          )
+    async ({ query }) =>
+      runMcpTool(
+        context,
+        { tool: "search", scope: "transcripts:search", timeoutMs: 15_000 },
+        async () => {
+          try {
+            const output = await searchDocuments(
+              context.principal.userId,
+              query,
+              { appUrl: context.appUrl }
+            )
+            if (!isWithinToolLimit(output)) {
+              return toolError(
+                "response_too_large",
+                "The bounded search response exceeded the tool limit."
+              )
+            }
+            return textResult(output)
+          } catch {
+            return toolError(
+              "temporarily_unavailable",
+              "Engram search is temporarily unavailable."
+            )
+          }
         }
-        return textResult(output)
-      } catch {
-        return toolError(
-          "temporarily_unavailable",
-          "Engram search is temporarily unavailable."
-        )
-      }
-    }
+      )
   )
 }

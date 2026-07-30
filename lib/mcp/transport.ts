@@ -1,4 +1,5 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js"
+import { randomUUID } from "node:crypto"
 import type { AuthPrincipal } from "@/lib/auth/principal"
 import { isAuthFailure } from "@/lib/auth/policy"
 import { requireMcpPrincipal } from "./auth"
@@ -17,6 +18,38 @@ function jsonRpcError(status: number, code: number, message: string): Response {
     { jsonrpc: "2.0", error: { code, message }, id: null },
     { status }
   )
+}
+
+async function boundedPostRequest(
+  request: Request
+): Promise<Request | Response> {
+  if (!request.body) return request
+  const reader = request.body.getReader()
+  const chunks: Uint8Array[] = []
+  let totalBytes = 0
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    totalBytes += value.byteLength
+    if (totalBytes > MCP_MAX_REQUEST_BYTES) {
+      await reader.cancel()
+      return jsonRpcError(413, -32000, "Request body is too large.")
+    }
+    chunks.push(value)
+  }
+
+  const body = new Uint8Array(totalBytes)
+  let offset = 0
+  for (const chunk of chunks) {
+    body.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return new Request(request.url, {
+    method: request.method,
+    headers: request.headers,
+    body: body.buffer,
+  })
 }
 
 export async function handleMcpHttpRequest(
@@ -43,13 +76,17 @@ export async function handleMcpHttpRequest(
     return jsonRpcError(405, -32000, "Method not allowed.")
   }
 
+  const boundedRequest = await boundedPostRequest(request)
+  if (boundedRequest instanceof Response) return boundedRequest
+
   const appUrl = (
     env.BETTER_AUTH_URL ??
     env.NEXT_PUBLIC_APP_URL ??
     new URL(request.url).origin
   ).replace(/\/+$/, "")
+  const requestId = randomUUID()
   const server = createEngramMcpServer(
-    { principal, appUrl },
+    { principal, appUrl, requestId },
     dependencies.server
   )
   const transport = new WebStandardStreamableHTTPServerTransport({
@@ -59,8 +96,9 @@ export async function handleMcpHttpRequest(
 
   try {
     await server.connect(transport)
-    return await transport.handleRequest(request)
+    return await transport.handleRequest(boundedRequest)
   } catch {
+    console.error(JSON.stringify({ event: "mcp_transport_error", requestId }))
     return jsonRpcError(500, -32603, "Internal MCP server error.")
   } finally {
     await server.close().catch(() => undefined)

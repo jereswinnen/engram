@@ -6,10 +6,11 @@ import {
 } from "@/lib/recordings/documents"
 import { recordingUrl } from "@/lib/search/documents"
 import { MCP_MAX_TOOL_BYTES, utf8ByteLength } from "../limits"
-import { requireToolScope, toolError } from "../errors"
+import { toolError } from "../errors"
 import {
   oauthSecurityScheme,
   READ_ONLY_ANNOTATIONS,
+  runMcpTool,
   type McpToolContext,
 } from "./shared"
 
@@ -60,91 +61,102 @@ export function registerTranscriptPageTool(
       annotations: READ_ONLY_ANNOTATIONS,
       _meta: oauthSecurityScheme("transcripts:read"),
     },
-    async ({ recordingId, cursor, limit }) => {
-      const scopeError = requireToolScope(
-        context.principal,
-        "transcripts:read",
-        context.appUrl
-      )
-      if (scopeError) return scopeError
+    async ({ recordingId, cursor, limit }) =>
+      runMcpTool(
+        context,
+        {
+          tool: "get_transcript_page",
+          scope: "transcripts:read",
+          timeoutMs: 5_000,
+        },
+        async () => {
+          try {
+            const result = await getPage(
+              context.principal.userId,
+              recordingId,
+              {
+                cursor,
+                limit,
+              }
+            )
+            if (!result.ok) {
+              if (result.error === "not_found") {
+                return toolError("not_found", "The recording was not found.")
+              }
+              if (result.error === "stale_cursor") {
+                return toolError(
+                  "stale_cursor",
+                  "The transcript changed; fetch it again to obtain a new cursor."
+                )
+              }
+              return toolError(
+                "invalid_input",
+                "The transcript cursor is invalid."
+              )
+            }
 
-      try {
-        const result = await getPage(context.principal.userId, recordingId, {
-          cursor,
-          limit,
-        })
-        if (!result.ok) {
-          if (result.error === "not_found") {
-            return toolError("not_found", "The recording was not found.")
-          }
-          if (result.error === "stale_cursor") {
+            const page = result.page
+            const accepted: typeof page.segments = []
+            let output: z.infer<typeof transcriptPageOutputSchema> | null = null
+            const buildOutput = (segments: typeof page.segments) => {
+              const nextOffset = page.offset + segments.length
+              return {
+                recording: {
+                  id: page.recording.id,
+                  title: page.recording.title,
+                  url: recordingUrl(context.appUrl, page.recording.id),
+                  createdAt: page.recording.createdAt.toISOString(),
+                  language: page.recording.language,
+                },
+                segments: segments.map((segment) => ({
+                  ...segment,
+                  url: recordingUrl(
+                    context.appUrl,
+                    page.recording.id,
+                    segment.startSeconds
+                  ),
+                })),
+                nextCursor:
+                  nextOffset < page.totalSegmentCount
+                    ? encodeTranscriptCursor({
+                        v: 1,
+                        transcriptionId: page.transcriptionId,
+                        offset: nextOffset,
+                      })
+                    : null,
+              }
+            }
+
+            for (const segment of page.segments) {
+              const candidateSegments = [...accepted, segment]
+              const candidate = buildOutput(candidateSegments)
+              if (
+                utf8ByteLength(JSON.stringify(candidate)) > MCP_MAX_TOOL_BYTES
+              ) {
+                break
+              }
+              accepted.push(segment)
+              output = candidate
+            }
+            if (page.segments.length === 0) output = buildOutput([])
+            if (!output) {
+              return toolError(
+                "response_too_large",
+                "A stored transcript segment exceeds the tool response limit."
+              )
+            }
+
+            return {
+              content: [{ type: "text", text: JSON.stringify(output) }],
+              structuredContent: output,
+            }
+          } catch {
             return toolError(
-              "stale_cursor",
-              "The transcript changed; fetch it again to obtain a new cursor."
+              "temporarily_unavailable",
+              "The transcript is temporarily unavailable."
             )
           }
-          return toolError("invalid_input", "The transcript cursor is invalid.")
         }
-
-        const page = result.page
-        const accepted: typeof page.segments = []
-        let output: z.infer<typeof transcriptPageOutputSchema> | null = null
-        const buildOutput = (segments: typeof page.segments) => {
-          const nextOffset = page.offset + segments.length
-          return {
-            recording: {
-              id: page.recording.id,
-              title: page.recording.title,
-              url: recordingUrl(context.appUrl, page.recording.id),
-              createdAt: page.recording.createdAt.toISOString(),
-              language: page.recording.language,
-            },
-            segments: segments.map((segment) => ({
-              ...segment,
-              url: recordingUrl(
-                context.appUrl,
-                page.recording.id,
-                segment.startSeconds
-              ),
-            })),
-            nextCursor:
-              nextOffset < page.totalSegmentCount
-                ? encodeTranscriptCursor({
-                    v: 1,
-                    transcriptionId: page.transcriptionId,
-                    offset: nextOffset,
-                  })
-                : null,
-          }
-        }
-
-        for (const segment of page.segments) {
-          const candidateSegments = [...accepted, segment]
-          const candidate = buildOutput(candidateSegments)
-          if (utf8ByteLength(JSON.stringify(candidate)) > MCP_MAX_TOOL_BYTES) {
-            break
-          }
-          accepted.push(segment)
-          output = candidate
-        }
-        if (page.segments.length === 0) output = buildOutput([])
-        if (!output) {
-          return toolError(
-            "response_too_large",
-            "A stored transcript segment exceeds the tool response limit."
-          )
-        }
-
-        return {
-          content: [{ type: "text", text: JSON.stringify(output) }],
-          structuredContent: output,
-        }
-      } catch {
-        return toolError(
-          "temporarily_unavailable",
-          "The transcript is temporarily unavailable."
-        )
-      }
-    }
+      )
   )
 }

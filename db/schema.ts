@@ -397,6 +397,23 @@ export const transcriptEmbeddings = pgTable(
   ]
 )
 
+export const mcpRateLimitBuckets = pgTable(
+  "mcp_rate_limit_buckets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    keyDigest: text("key_digest").notNull(),
+    windowStart: timestamp("window_start").notNull(),
+    requestCount: integer("request_count").notNull().default(1),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("mcp_rate_limit_bucket_unique").on(t.keyDigest, t.windowStart),
+    index("mcp_rate_limit_expires_at_idx").on(t.expiresAt),
+    check("mcp_rate_limit_request_count_check", sql`${t.requestCount} > 0`),
+  ]
+)
+
 export const aiEnhancements = pgTable(
   "ai_enhancements",
   {

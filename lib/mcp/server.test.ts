@@ -13,6 +13,7 @@ vi.mock("@/lib/recordings/documents", () => ({
   getOwnedSummary: vi.fn(),
   encodeTranscriptCursor: vi.fn(() => "cursor"),
 }))
+vi.mock("@/db", () => ({ db: { execute: vi.fn() } }))
 
 import { createEngramMcpServer, type McpServerDependencies } from "./server"
 
@@ -32,7 +33,16 @@ async function request(
 ) {
   const server = createEngramMcpServer(
     { principal, appUrl: "https://engram.example" },
-    dependencies
+    {
+      rateLimit: async () => ({
+        allowed: true,
+        limit: 60,
+        remaining: 59,
+        retryAfterSeconds: 60,
+      }),
+      logEvent: () => undefined,
+      ...dependencies,
+    }
   )
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,

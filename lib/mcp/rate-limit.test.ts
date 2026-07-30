@@ -2,11 +2,29 @@ import { describe, expect, it, vi } from "vitest"
 import type { SQL } from "drizzle-orm"
 import { PgDialect } from "drizzle-orm/pg-core"
 
-vi.mock("@/db", () => ({ db: { execute: vi.fn() } }))
+const dbMock = vi.hoisted(() => ({ execute: vi.fn() }))
+
+vi.mock("@/db", () => ({ db: dbMock }))
 
 import { checkMcpRateLimit, rateLimitKey } from "./rate-limit"
 
 describe("MCP durable rate limiting", () => {
+  it("preserves the Drizzle database receiver for the default executor", async () => {
+    dbMock.execute.mockImplementationOnce(function (this: unknown) {
+      if (this !== dbMock) throw new TypeError("Database receiver was lost")
+      return Promise.resolve([{ request_count: 1 }])
+    })
+
+    const result = await checkMcpRateLimit({
+      userId: "user-a",
+      clientId: "codex",
+      tool: "search",
+    })
+
+    expect(result.allowed).toBe(true)
+    expect(dbMock.execute).toHaveBeenCalledOnce()
+  })
+
   it("derives opaque keys isolated by user, client, and tool", () => {
     const base = {
       userId: "user-a",

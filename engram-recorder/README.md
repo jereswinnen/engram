@@ -10,7 +10,7 @@ keeps a recoverable local M4A, and uploads it directly to Engram.
    directly to R2 with a short-lived signed URL, and asks Engram to verify the stored
    byte count before processing. The Engram access token is never sent to R2.
 2. **Native recording core — complete.** `AVAudioEngine` captures the microphone,
-   `ScreenCaptureKit` supplies system audio, and a dedicated mixer writes 48 kHz,
+   a Core Audio process tap supplies system audio, and a dedicated mixer writes 48 kHz,
    stereo, 96 kbps AAC to M4A.
 3. **Recovery and upload — complete.** Recordings are finalized in Application
    Support before upload. History survives relaunches, interrupted uploads become
@@ -39,8 +39,8 @@ keeps a recoverable local M4A, and uploads it directly to Engram.
    ad-hoc builds use the encrypted, non-synchronizing macOS login Keychain; properly
    Developer-signed builds can migrate to the device-only Data Protection Keychain
    after a verified durable copy. Access credentials remain in memory.
-4. Start with the menu-bar control or ⌘⇧R. Grant Microphone and Screen & System Audio
-   Recording access when macOS asks.
+4. Start with the menu-bar control or ⌘⇧R. Grant Microphone and System Audio Recording
+   access when macOS asks. Engram does not capture the screen.
 5. In Settings, choose whether meeting detection is Off, asks before recording, or
    records automatically. Ask before recording is the default.
 6. Optionally enable **Launch Engram at login**. If macOS requires approval, use the

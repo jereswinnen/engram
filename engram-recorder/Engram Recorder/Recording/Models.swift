@@ -96,8 +96,8 @@ public struct RemoteRecordingMetadata: Decodable, Sendable {
 enum RecorderError: LocalizedError {
   case settingsIncomplete
   case microphonePermissionDenied
-  case screenRecordingPermissionDenied
-  case noDisplayAvailable
+  case systemAudioPermissionDenied
+  case systemAudioCaptureFailed(String)
   case invalidAudioFormat
   case audioWriteFailed(String)
   case noAudioCaptured
@@ -109,10 +109,10 @@ enum RecorderError: LocalizedError {
       "Add your Engram URL and sign in from Settings first."
     case .microphonePermissionDenied:
       "Microphone access is required. Enable Engram in System Settings → Privacy & Security → Microphone."
-    case .screenRecordingPermissionDenied:
-      "Screen Recording access is required to capture meeting audio. Enable Engram in System Settings → Privacy & Security → Screen & System Audio Recording."
-    case .noDisplayAvailable:
-      "No display is available for system-audio capture."
+    case .systemAudioPermissionDenied:
+      "System Audio Recording access is required to capture meeting audio. Enable Engram in System Settings → Privacy & Security → Screen & System Audio Recording."
+    case .systemAudioCaptureFailed(let message):
+      "System audio capture could not start. \(message)"
     case .invalidAudioFormat:
       "The current audio devices could not provide a recordable format."
     case .audioWriteFailed(let message):

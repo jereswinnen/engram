@@ -25,7 +25,11 @@ let package = Package(
     .target(
       name: "EngramArchiveCore",
       path: "Engram Recorder/Recording",
-      exclude: ["AudioCaptureService.swift", "RecorderController.swift"],
+      exclude: [
+        "AudioCaptureService.swift",
+        "CoreAudioTapCapture.swift",
+        "RecorderController.swift",
+      ],
       sources: ["Models.swift", "RecordingArchive.swift"]
     ),
     .testTarget(

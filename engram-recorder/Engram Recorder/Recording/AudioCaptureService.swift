@@ -1,20 +1,15 @@
 import AVFoundation
 import Accelerate
-import CoreMedia
 import Foundation
-import ScreenCaptureKit
 
-final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
+final class AudioCaptureService {
   typealias MeterHandler = @Sendable (Float) -> Void
   typealias FailureHandler = @Sendable (Error) -> Void
 
   private var engine: AVAudioEngine?
   private var recordingMixer: AVAudioMixerNode?
   private var systemAudioPlayer: AVAudioPlayerNode?
-  private let captureQueue = DispatchQueue(
-    label: "jeremys.engram.capture",
-    qos: .userInitiated
-  )
+  private let systemAudioTap = CoreAudioTapCapture()
   private let writerQueue = DispatchQueue(
     label: "jeremys.engram.audio-writer",
     qos: .utility
@@ -26,7 +21,6 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
   private let audioEngineLock = NSLock()
   private let stateLock = NSLock()
 
-  private var stream: SCStream?
   private var audioFile: AVAudioFile?
   private var systemAudioConverter: AVAudioConverter?
   private var isCapturing = false
@@ -38,6 +32,7 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
   private var meterHandler: MeterHandler?
   private var failureHandler: FailureHandler?
   private var configurationObserver: NSObjectProtocol?
+  private var recordingActivity: NSObjectProtocol?
 
   private static let mixFormat = AVAudioFormat(
     commonFormat: .pcmFormatFloat32,
@@ -55,51 +50,23 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
       throw RecorderError.microphonePermissionDenied
     }
 
-    let content: SCShareableContent
     do {
-      content = try await SCShareableContent.excludingDesktopWindows(
-        false,
-        onScreenWindowsOnly: false
-      )
-    } catch {
-      throw RecorderError.screenRecordingPermissionDenied
-    }
-    guard let display = content.displays.first else {
-      throw RecorderError.noDisplayAvailable
-    }
-
-    let ownBundleID = Bundle.main.bundleIdentifier
-    let ownApplications = content.applications.filter {
-      $0.bundleIdentifier == ownBundleID
-    }
-    let filter = SCContentFilter(
-      display: display,
-      excludingApplications: ownApplications,
-      exceptingWindows: []
-    )
-    let configuration = SCStreamConfiguration()
-    configuration.capturesAudio = true
-    configuration.excludesCurrentProcessAudio = true
-    configuration.sampleRate = 48_000
-    configuration.channelCount = 2
-    configuration.width = 2
-    configuration.height = 2
-    configuration.minimumFrameInterval = CMTime(value: 1, timescale: 1)
-    configuration.showsCursor = false
-
-    let stream = SCStream(
-      filter: filter,
-      configuration: configuration,
-      delegate: self
-    )
-    try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: captureQueue)
-    self.stream = stream
-
-    do {
+      beginRecordingActivity()
       try configureAudioEngine(
         outputURL: outputURL,
         meterHandler: meterHandler,
         failureHandler: failureHandler
+      )
+      try systemAudioTap.prepare(
+        bufferHandler: { [weak self] buffer in
+          guard let self, self.stateLock.withLock({ self.isCapturing }) else {
+            return
+          }
+          self.consumeSystemAudio(buffer)
+        },
+        failureHandler: { [weak self] error in
+          self?.failureHandler?(error)
+        }
       )
       guard let engine, let systemAudioPlayer else {
         throw RecorderError.invalidAudioFormat
@@ -110,22 +77,22 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
         systemAudioPlayer.play()
         stateLock.withLock { isCapturing = true }
       }
-      try await stream.startCapture()
+      try systemAudioTap.start()
     } catch {
-      await stopAfterFailedStart()
+      stopAfterFailedStart()
       throw error
     }
   }
 
   func stop() async throws {
-    let activeStream = stateLock.withLock { () -> SCStream? in
-      guard isCapturing || stream != nil else { return nil }
+    let hadActiveRecording = stateLock.withLock { () -> Bool in
+      guard isCapturing || systemAudioTap.isPrepared else { return false }
       isCapturing = false
-      return stream
+      return true
     }
-    guard let activeStream else { throw RecorderError.noActiveRecording }
+    guard hadActiveRecording else { throw RecorderError.noActiveRecording }
 
-    await stopScreenCapture(activeStream)
+    systemAudioTap.stop()
 
     let result = finishAudioEngine()
     if let error = result.error {
@@ -136,31 +103,9 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
     }
   }
 
-  func stream(
-    _ stream: SCStream,
-    didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
-    of type: SCStreamOutputType
-  ) {
-    guard type == .audio,
-      sampleBuffer.isValid,
-      CMSampleBufferDataIsReady(sampleBuffer),
-      stateLock.withLock({ isCapturing })
-    else {
-      return
-    }
-
-    do {
-      let buffer = try sampleBuffer.audioBuffer()
-      guard let converted = convertSystemAudio(buffer) else { return }
-      systemAudioPlayer?.scheduleBuffer(converted)
-    } catch {
-      // A malformed individual system-audio buffer should not end the recording.
-    }
-  }
-
-  func stream(_ stream: SCStream, didStopWithError error: Error) {
-    stateLock.withLock { isCapturing = false }
-    failureHandler?(error)
+  private func consumeSystemAudio(_ buffer: AVAudioPCMBuffer) {
+    guard let converted = convertSystemAudio(buffer) else { return }
+    systemAudioPlayer?.scheduleBuffer(converted)
   }
 
   private func configureAudioEngine(
@@ -358,7 +303,6 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
       tapInstalled = false
       writerQueue.sync {}
       audioFile = nil
-      stream = nil
       systemAudioConverter = nil
       meterHandler = nil
       failureHandler = nil
@@ -379,24 +323,31 @@ final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
       self.systemAudioPlayer = nil
       self.recordingMixer = nil
       self.engine = nil
+      endRecordingActivity()
       return stateLock.withLock {
         AudioWriteResult(error: writerError, frameCount: writtenFrameCount)
       }
     }
   }
 
-  private func stopAfterFailedStart() async {
-    if let stream {
-      await stopScreenCapture(stream)
-    }
+  private func stopAfterFailedStart() {
+    systemAudioTap.stop()
     finishAudioEngine()
     stateLock.withLock { isCapturing = false }
   }
 
-  private func stopScreenCapture(_ stream: SCStream) async {
-    try? await stream.stopCapture()
-    captureQueue.sync {}
-    try? stream.removeStreamOutput(self, type: .audio)
+  private func beginRecordingActivity() {
+    guard recordingActivity == nil else { return }
+    recordingActivity = ProcessInfo.processInfo.beginActivity(
+      options: [.userInitiated, .idleSystemSleepDisabled],
+      reason: "Engram is recording audio"
+    )
+  }
+
+  private func endRecordingActivity() {
+    guard let recordingActivity else { return }
+    ProcessInfo.processInfo.endActivity(recordingActivity)
+    self.recordingActivity = nil
   }
 }
 
@@ -405,25 +356,8 @@ private struct AudioWriteResult {
   let frameCount: AVAudioFramePosition
 }
 
-extension CMSampleBuffer {
-  fileprivate func audioBuffer() throws -> AVAudioPCMBuffer {
-    guard let description = formatDescription else {
-      throw RecorderError.invalidAudioFormat
-    }
-    let format = AVAudioFormat(cmAudioFormatDescription: description)
-
-    let frameCount = AVAudioFrameCount(numSamples)
-    guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
-      throw RecorderError.invalidAudioFormat
-    }
-    buffer.frameLength = frameCount
-    try copyPCMData(fromRange: 0..<Int(frameCount), into: buffer.mutableAudioBufferList)
-    return buffer
-  }
-}
-
 extension AVAudioPCMBuffer {
-  fileprivate func copied() -> AVAudioPCMBuffer? {
+  func copied() -> AVAudioPCMBuffer? {
     guard
       let copy = AVAudioPCMBuffer(
         pcmFormat: format,

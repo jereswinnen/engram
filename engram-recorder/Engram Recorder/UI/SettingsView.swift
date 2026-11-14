@@ -79,7 +79,7 @@ struct SettingsView: View {
           Button("Microphone Privacy Settings") {
             openPrivacyPane("Privacy_Microphone")
           }
-          Button("Screen Recording Privacy Settings") {
+          Button("System Audio Privacy Settings") {
             openPrivacyPane("Privacy_ScreenCapture")
           }
         }

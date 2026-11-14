@@ -39,5 +39,7 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Engram records your microphone so it can capture your side of a meeting.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Engram records meeting audio from other apps so it can create your transcript.</string>
 </dict>
 </plist>
